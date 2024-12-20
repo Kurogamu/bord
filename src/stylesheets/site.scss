@@ -1,5 +1,6 @@
 $font-stack: Helvetica, sans-serif;
 $primary-color: #fdfdfd;
+$faded-color: #a0a0a0;
 $background-color: #1a1a1a;
 $table-background-color: #101010;
 $background-color-highlight: #151515;
@@ -12,6 +13,10 @@ $table-border-color: #404040;
 $table-border: $table-border-color .1em solid;
 $table-header-border: $border-color .1em solid;
 $modal-border: $modal-border-color .25em solid;
+
+$button-background-color: #101010;
+$button-background-hover: #303030;
+$button-background-flash: #909090;
 
 body {
   font: 100% $font-stack;
@@ -67,18 +72,94 @@ body {
       margin-right: 1em;
     }
   }
-  
+
   button {
     border: .1em solid $border-color;
     border-radius: .5em;
     color: $primary-color;
-    background-color: $table-background-color;
-    padding: .25em .5em;
+    background-color: $button-background-color;
+    padding: .25em 1em;
     cursor: pointer;
+    @keyframes onhover {
+      from {
+        background-color: $button-background-flash;
+      }
+      to {
+        background-color: $button-background-hover;
+      }
+    }
     &:hover {
-      background-color: $background-color-highlight;
+      animation-name: onhover;
+      animation-duration: 0.5s;
+      background-color: $button-background-hover;
     }
   }
+
+
+  h3 {
+    padding: 0;
+    margin: 0;
+    padding-bottom: 0.5em;
+    border-bottom: $table-border;
+    margin-bottom: 0.5em;
+  }
+
+  .editor-section {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+
+    &:not(:first-child) {
+      margin-top: 2em;
+    }
+
+    > button {
+      align-self: center;
+    }
+  }
+
+  .table-wr {
+    .blank {
+      color: $faded-color;
+      font-style: italic;
+    }
+
+    table {
+      table-layout: fixed;
+      border-collapse: collapse;
+    }
+
+    th {
+      font-weight: 600;
+      border-bottom: $table-header-border;
+    }
+
+    th, td {
+      padding: .5em;
+      text-align: center;
+      min-width: 1em;
+      min-height: 1em;
+    }
+
+    tr:not(:last-child) {
+      td {
+        border-bottom: $table-border;
+      }
+    }
+
+    th:not(:last-child), td:not(:last-child) {
+      border-right: $table-border;
+    }
+  }
+}
+
+.column-editor {
+  display: flex;
+  flex-direction: row;
+  > div:not(:last-child) {
+    margin-right: 1em;
+  }
+  padding-bottom: 1em;
 }
 
 .input-wr {
@@ -191,7 +272,18 @@ body {
     }
   }
 
+  @keyframes onhover {
+    from {
+      background-color: $table-background-color;
+    }
+    to {
+      background-color: $background-color-highlight;
+    }
+  }
+
   &:hover {
+    animation-name: onhover;
+    animation-duration: 0.5s;
     background-color: $background-color-highlight;
   }
 
