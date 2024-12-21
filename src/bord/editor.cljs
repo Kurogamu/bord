@@ -39,16 +39,16 @@
     state))
 
 (defn add-column [msg state]
-  (swap! state update-in [:columns]
-         #(conj % (table-editor-default-column (count (:columns @state))))))
+  (let [new-column (-> @state :columns count table-editor-default-column)]
+    (swap! state update-in [:columns] #(conj % new-column))))
 
 (defn add-row [msg state]
   (swap! state update-in [:rows] #(conj % (or msg {}))))
 
 (defn unset-active-cell [msg state]
-  (swap! state #(assoc (apply-edit-cell %)
-                       :active-cell nil
-                       :edit-cell "")))
+  (swap! state #(-> %
+                    apply-edit-cell
+                    (assoc :active-cell nil :edit-cell ""))))
 
 (defn set-active-cell [msg state]
   (let [next-value (or (get-in (:rows @state) msg) "")]
@@ -58,8 +58,8 @@
 
 (defn move-active-cell [msg state]
   (let [[row column] (:active-cell @state)
-        last-row (dec (count (:rows @state)))
-        last-column (dec (count (:columns @state)))]
+        last-row (-> @state :rows count dec)
+        last-column (-> @state :columns count dec)]
     (case msg
       :down (if (< row last-row)
                 (set-active-cell [(inc row) column] state))
@@ -71,13 +71,19 @@
               (set-active-cell [(inc row) 0] state))
       nil)))
 
+(defn set-column-name [msg state]
+  (let [[column-key value] msg]
+    (swap! state assoc-in [:columns column-key :name] value)))
+
+(defn set-column-type [msg state]
+  (let [[column-key value] msg]
+    (swap! state assoc-in [:columns column-key :type] value)))
+
 (defn table-data-payload [state]
-  {:tableId (:tableId state)
-   :name (:name state)
-   :created (if (:new state) (js/Date.now) (:created state))
-   :updated (js/Date.now)
-   :columns (:columns state)
-   :count (:count state)})
+  (-> state
+    (select-keys [:tableId :name :updated :columns :count])
+    (assoc :created (if (:new state) (js/Date.now) (:created state))
+           :updated (js/Date.now))))
 
 (defn table-editor-name []
   [:div {:class "editor-section name-editor"}
@@ -93,7 +99,7 @@
 (defn table-editor-column-set []
   [:div {:class "editor-section column-set-editor"}
    [:h3 "Columns"]
-   (doall (for [column-index (range (count (:columns @table-editor-state)))]
+   (doall (for [column-index (-> @table-editor-state :columns count range)]
             (table-editor-column column-index)))
    [:button {:class "btn add-column-btn"
              :on-click #(add-column nil table-editor-state)}
@@ -104,18 +110,16 @@
    [:div {:class "input-wr"}
     [:input
      {:type "text"
-      :value (:name (nth (:columns @table-editor-state) column-key))
+      :value (-> @table-editor-state :columns (nth column-key) :name)
       :auto-focus true
       :placeholder "New column name"
-      :on-change #(swap! table-editor-state assoc-in [:columns column-key :name] (.. % -target -value))}
-     ]]
+      :on-change #(set-column-name [column-key (.. % -target -value)] table-editor-state)}]]
    [:div {:class "input-wr"}
     [:select
-     {:value (:type (nth (:columns @table-editor-state) column-key))
-      :on-change #(swap! table-editor-state assoc-in [:columns column-key :type] (.. % -target -value))}
-     [:option { :value :string } "String"]
-     [:option { :value :int } "Integer"]
-     [:option { :value :float } "Decimal"]]]])
+     {:value (-> @table-editor-state :columns (nth column-key) :type)
+      :on-change #(set-column-type [column-key (.. % -target -value)] table-editor-state)}
+     [:option { :value :string } "Text"]
+     [:option { :value :number } "Number"]]]])
 
 
 (defn table-cell-editor []
