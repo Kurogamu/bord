@@ -5,25 +5,27 @@
     [clojure.string :refer [blank?]]
     ["react" :as react]))
 
-(defn table-editor-default-column [index]
-   {:tableId :new
-    :index index
+(defn table-editor-default-column []
+   {:id (js/crypto.randomUUID)
     :type "string"})
 
 (defn table-editor-default-state []
-  {:new true
-   :name ""
-   :columns [(table-editor-default-column 0)]
-   :rows [{}]
-   :active-cell nil
-   :count 0})
+  (let [column (table-editor-default-column)]
+    {:new true
+     :id (js/crypto.randomUUID)
+     :name ""
+     :columns {(:id column) column}
+     :sort-columns [(:id column)]
+     :rows [{}]
+     :active-cell nil
+     :count 0}))
 
 (defonce table-editor-state (r/atom nil))
 
 (defn table-editor-init-state
   ([] (reset! table-editor-state (table-editor-default-state)))
   ([data] (reset! table-editor-state {:new false
-                                      :tableId (.-tableId data)
+                                      :id (.-tableId data)
                                       :name (.-name data)
                                       :columns []
                                       :rows []
@@ -39,8 +41,10 @@
     state))
 
 (defn add-column [msg state]
-  (let [new-column (-> @state :columns count table-editor-default-column)]
-    (swap! state update-in [:columns] #(conj % new-column))))
+  (let [new-column (table-editor-default-column)]
+    (swap! state (fn [state] (-> state
+                      (update :sort-columns #(conj % (:id new-column)))
+                      (assoc-in [:columns (:id new-column)] new-column))))))
 
 (defn add-row [msg state]
   (swap! state update-in [:rows] #(conj % (or msg {}))))
@@ -57,18 +61,19 @@
                       (assoc :active-cell msg :edit-cell next-value)))))
 
 (defn move-active-cell [msg state]
-  (let [[row column] (:active-cell @state)
+  (let [[row column-id] (:active-cell @state)
+        column-index (.indexOf (:sort-columns @state) column-id)
         last-row (-> @state :rows count dec)
         last-column (-> @state :columns count dec)]
     (case msg
       :down (if (< row last-row)
-                (set-active-cell [(inc row) column] state))
-      :prev (if (> column 0)
-              (set-active-cell [row (dec column)] state)
-              (set-active-cell [(dec row) last-column] state))
-      :next (if (< column last-column)
-              (set-active-cell [row (inc column)] state)
-              (set-active-cell [(inc row) 0] state))
+                (set-active-cell [(inc row) (nth (:sort-columns @state) column-index)] state))
+      :prev (if (> column-index 0)
+              (set-active-cell [row (nth (:sort-columns @state) (dec column-index))] state)
+              (set-active-cell [(dec row) (last (:sort-columns @state))] state))
+      :next (if (< column-index last-column)
+              (set-active-cell [row (nth (:sort-columns @state) (inc column-index))] state)
+              (set-active-cell [(inc row) (first (:sort-columns @state))] state))
       nil)))
 
 (defn set-column-name [msg state]
@@ -79,11 +84,33 @@
   (let [[column-key value] msg]
     (swap! state assoc-in [:columns column-key :type] value)))
 
-(defn table-data-payload [state]
+(defn table-meta-payload [state]
   (-> state
-    (select-keys [:tableId :name :updated :columns :count])
-    (assoc :created (if (:new state) (js/Date.now) (:created state))
-           :updated (js/Date.now))))
+    (select-keys [:name :updated :count])
+    (assoc 
+      :tableId (:id state)
+      :created (if (:new state) (js/Date.now) (:created state))
+      :updated (js/Date.now))))
+
+(defn columns-payload [state]
+  (map (fn [column]
+         {:tableId (:id state)
+          :columnId (:id column)
+          :type (:type column)
+          :name (:name column)})
+       (vals (:columns state))))
+
+(defn rows-payload [state]
+  {:fragmentId (js/crypto.randomUUID)
+   :tableId (:id state)
+   :first-row 0
+   :last-row (count (:rows state))
+   :data (:rows state)})
+
+(defn table-data-payload [state]
+  {:meta (table-meta-payload state)
+   :rows (rows-payload state)
+   :columns (columns-payload state)})
 
 (defn table-editor-name []
   [:div {:class "editor-section name-editor"}
@@ -99,24 +126,24 @@
 (defn table-editor-column-set []
   [:div {:class "editor-section column-set-editor"}
    [:h3 "Columns"]
-   (doall (for [column-index (-> @table-editor-state :columns count range)]
-            (table-editor-column column-index)))
+   (doall (for [column-id (:sort-columns @table-editor-state)]
+            (table-editor-column column-id)))
    [:button {:class "btn add-column-btn"
              :on-click #(add-column nil table-editor-state)}
     "Add column"]])
 
-(defn table-editor-column [column-key]
-  [:div {:key column-key :class "column-editor"}
+(defn table-editor-column [column-id]
+  [:div {:key column-id :class "column-editor"}
    [:div {:class "input-wr"}
     [:input
      {:type "text"
-      :value (-> @table-editor-state :columns (nth column-key) :name)
+      :value (get-in @table-editor-state [:columns column-id :name])
       :auto-focus true
       :placeholder "New column name"
-      :on-change #(set-column-name [column-key (.. % -target -value)] table-editor-state)}]]
+      :on-change #(set-column-name [column-id (.. % -target -value)] table-editor-state)}]]
    [:div {:class "input-wr"}
     [:select
-     {:value (-> @table-editor-state :columns (nth column-key) :type)
+     {:value (get-in @table-editor-state [:columns column-id :type])
       :on-change #(set-column-type [column-key (.. % -target -value)] table-editor-state)}
      [:option { :value :string } "Text"]
      [:option { :value :number } "Number"]]]])
@@ -142,8 +169,8 @@
                                (move-active-cell :next table-editor-state)))
                      nil))}])
 
-(defn table-editor-cell [column row-key data]
-  (let [cell-key [row-key (:index column)]
+(defn table-editor-cell [column-id row-key data]
+  (let [cell-key [row-key column-id]
         activate-cell #(set-active-cell cell-key table-editor-state)]
     (cond
       (= cell-key (:active-cell @table-editor-state))
@@ -160,16 +187,17 @@
     [:table
      [:tr
       (doall
-        (for [{name :name index :index} (:columns @table-editor-state)]
-          (if (blank? name)
-            [:th {:key index :class "blank"} "Blank"]
-            [:th {:key index} name])))]
+        (for [column-id (:sort-columns @table-editor-state)]
+          (let [name (get-in @table-editor-state [:columns column-id :name])]
+            (if (blank? name)
+              [:th {:key column-id :class "blank"} "Blank"]
+              [:th {:key column-id} name]))))]
      (doall
        (for [[row-key row-data] (map-indexed vector (:rows @table-editor-state))]
          [:tr {:key row-key}
           (doall
-            (for [column (:columns @table-editor-state)]
-              (table-editor-cell column row-key (get row-data (:index column)))))]))]]
+            (for [column-id (:sort-columns @table-editor-state)]
+              (table-editor-cell column-id row-key (get row-data column-id))))]))]]
    [:button {:class "btn add-row-btn"
              :on-click #(add-row nil table-editor-state)}
     "Add row"]])

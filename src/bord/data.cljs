@@ -4,7 +4,7 @@
 
 (defonce loaded-db (r/atom nil))
 (def db-name "bord-default")
-(def db-version 5)
+(def db-version 7)
 (def meta-store-name "table-meta")
 (def fragment-store-name "table-fragment")
 (def column-store-name "table-column")
@@ -15,8 +15,7 @@
     (.createIndex store "name" "name" #js {"unique" false})
     (.createIndex store "created_at" "created_at" #js {"unique" false})
     (.createIndex store "updated_at" "updated_at" #js {"unique" false})
-    (.createIndex store "count" "count" #js {"unique" false})
-    (.createIndex store "columns" "columns" #js {"unique" false})))
+    (.createIndex store "count" "count" #js {"unique" false})))
 
 (defn init-table-column-store [db]
   (let [store (.createObjectStore
@@ -29,9 +28,7 @@
   (let [store (.createObjectStore
                 db fragment-store-name #js {"keyPath" "fragmentId"})]
     (.createIndex store "tableId" "tableId" #js {"unique" false})
-    (.createIndex store "columnId" "columnId" #js {"unique" false})
-    (.createIndex store "row" "row" #js {"unique" false})
-    (.createIndex store "data" "data" #js {"unique" false})))
+    (.createIndex store "row" "row" #js {"unique" false})))
 
 (defn db-init-onsuccess [request callback]
   (reset! loaded-db (.-result request))
@@ -55,35 +52,30 @@
           #(db-init-onupgradeneeded % db-request on-success on-error))
     (set! (.-onerror db-request) on-error)))
 
-(defn get-transaction [{:keys [store-name command on-complete on-error]}]
-    (let [transaction (.transaction @loaded-db #js [store-name] command)]
-      (set! (.-oncomplete transaction) on-complete)
-      (set! (.-onerror transaction) on-error)
-      transaction))
-
-(defn db-put [{:as args :keys [data store-name on-complete on-error]}]
-  (-> (get-transaction (assoc args :command "readwrite"))
-      (.objectStore store-name)
-      (.put (clj->js data))))
-
-(defn db-add [{:as args :keys [data store-name on-complete on-error]}]
-  (-> (get-transaction (assoc args :command "readwrite"))
-      (.objectStore store-name)
-      (.add (clj->js data))))
-
-(defn update-table [{:as args :keys [data on-complete on-error]}]
-  (db-put (assoc args :store-name meta-store-name)))
+(defn get-transaction [{:keys [store-names command on-complete on-error]}]
+  (let [transaction (.transaction @loaded-db store-names command)]
+    (set! (.-oncomplete transaction) on-complete)
+    (set! (.-onerror transaction) on-error)
+    transaction))
 
 (defn add-table [{:as args :keys [data on-complete on-error]}]
-  (let [new-table (assoc data :tableId (js/crypto.randomUUID))]
-    (db-add (assoc args :data new-table :store-name meta-store-name))))
+  (let [store-names [meta-store-name column-store-name fragment-store-name]
+        transaction (-> args
+                        (select-keys [:on-complete :on-error])
+                        (assoc :store-names store-names :command "readwrite")
+                        get-transaction)
+        meta-store (.objectStore transaction meta-store-name)
+        column-store (.objectStore transaction column-store-name)
+        row-store (.objectStore transaction fragment-store-name)]
+    (doseq [column (:columns data)] (.add column-store (clj->js column)))
+    (.add meta-store (clj->js (:meta data)))
+    (.add row-store (clj->js (:rows data)))))
 
-(defn add-fragment [{:as args :keys [data on-complete on-error]}]
-  (let [new-fragment (assoc data :fragmentId (js/crypto.randomUUID))]
-    (db-add (assoc args :data new-fragment :store-name fragment-store-name))))
+(defn update-table [{:as args :keys [data on-complete on-error]}]
+  (add-table args))
 
 (defn get-db-cursor [store-name]
-  (-> (get-transaction {:store-name store-name
+  (-> (get-transaction {:store-names [store-name]
                         :command "readonly"
                         :on-complete #(js/console.info "Cursor completed")
                         :on-error #(js/console.error "Cursor failed: " %)})
