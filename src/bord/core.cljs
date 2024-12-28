@@ -3,7 +3,7 @@
     [bord.common :refer [keycodes]]
     [bord.editor :refer [table-editor table-editor-init-state]]
     [cljs.core.async :refer [go go-loop chan put!]]
-    [bord.data :refer [db-init add-table update-table table-read-all]]
+    [bord.data :refer [db-init add-table update-table read-all]]
     [reagent.core :as r]
     [reagent.dom :as d]
     ["react" :as react]
@@ -42,8 +42,10 @@
 ;; Task
 
 (defn read-tables [state]
-  (set-tables-loading true state)
-  (table-read-all #(set-tables % state)))
+  (let [tables (r/atom [])]
+    (set-tables-loading true state)
+    ; (read-all #(js/console.log (clj->js %))))) ;
+    (read-all #(set-tables % state))))
 
 (defn save-table [state table-data]
   (close-editor nil state)
@@ -70,30 +72,36 @@
     [:div {:class "title"} "Bord"]]
    [:div {:class "right-group"}]])
 
+(defn render-cell [{:keys [column cell]}]
+  [:td {:key (:columnId column)}
+   (str (or cell "Blank"))])
+
 (defn render-table-data [table]
   [:div {:class "table-content"}
     [:table
      [:tr
-      (for [cell (map-indexed vector (:columns table))]
-       [:th {:key (first cell)} (str (second cell))])]
-     (for [row (map-indexed vector (:data table))]
-       [:tr {:key (first row)}
-        (for [cell (map-indexed vector (second row))]
-         [:td {:key (first cell)} (str (second cell))])])]])
+      (for [column-id (:sort-columns table)]
+       [:th {:key column-id} (str (:name (get (:columns table) column-id)))])]
+     (for [[row-index row-data] (map-indexed vector (:rows table))]
+       [:tr {:key row-index}
+        (for [column-id (:sort-columns table)]
+         [render-cell {:cell (get row-data column-id)
+                       :column (get (:columns table) column-id)}])])]])
 
 (defn data-table [data]
+  (js/console.log (str data))
   [:div {:class "table-container"}
    (for [entry data]
-     [:div {:key (.-tableId entry)
+     [:div {:key (:tableId entry)
             :class "table"
             :on-click #(open-editor {:editor-type :table
                                      :target entry}
                                     app-state)}
       [:div {:class "table-header"}
-       (.-name entry)]
+       (:name entry)]
       [:div {:class "table-subheader"}
-       (.toLocaleString (js/Date. (.-updated entry)))]
-      ; (render-table-data entry)
+       (.toLocaleString (js/Date. (:updated entry)))]
+      (render-table-data entry)
       ])])
 
 (defn main [state]

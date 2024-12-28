@@ -1,5 +1,6 @@
 (ns bord.data
   (:require 
+    [clojure.walk :refer [stringify-keys]]
     [reagent.core :as r]))
 
 (defonce loaded-db (r/atom nil))
@@ -74,17 +75,9 @@
 (defn update-table [{:as args :keys [data on-complete on-error]}]
   (add-table args))
 
-(defn get-db-cursor [store-name]
-  (-> (get-transaction {:store-names [store-name]
-                        :command "readonly"
-                        :on-complete #(js/console.info "Cursor completed")
-                        :on-error #(js/console.error "Cursor failed: " %)})
-      (.objectStore store-name)
-      (.openCursor)))
-
-(defn table-read-all [on-complete]
+(defn read-all-store [store on-complete]
   (let [result (r/atom [])]
-    (set! (.-onsuccess (get-db-cursor meta-store-name))
+    (set! (.-onsuccess (.openCursor store))
           (fn [event]
             (let [cursor (.. event -target -result)]
               (if (some? cursor)
@@ -92,3 +85,32 @@
                   (swap! result conj (.-value cursor))
                   (.continue cursor))
                 (on-complete @result)))))))
+
+(defn compose-results [results callback]
+  (if (every? #(contains? results %) '(:meta :columns :fragments))
+    (let [columns (reduce (fn [m column]
+                            (assoc-in m [(:tableId column) (:columnId column)] column))
+                          {}
+                          (:columns results))
+          fragments (group-by :tableId (:fragments results))]
+      (callback (map (fn [table] (assoc table
+                         :columns (get columns (:tableId table))
+                         :rows (map stringify-keys
+                                    (mapcat :data (get fragments (:tableId table))))))
+                     (:meta results))))))
+
+(defn read-all [on-complete]
+  (let [results (r/atom {})
+        store-names [meta-store-name column-store-name fragment-store-name]
+        transaction (get-transaction 
+                      {:store-names store-names
+                        :command "readonly"
+                        :on-complete #(js/console.info "Cursor completed")
+                        :on-error #(js/console.error "Cursor failed: " %)})
+        on-store-complete (fn [key store-result]
+                            (swap! results assoc key (js->clj store-result {:keywordize-keys true}))
+                            (compose-results @results on-complete))]
+    (read-all-store (.objectStore transaction meta-store-name) #(on-store-complete :meta %))
+    (read-all-store (.objectStore transaction column-store-name) #(on-store-complete :columns %))
+    (read-all-store (.objectStore transaction fragment-store-name) #(on-store-complete :fragments %))
+    ))

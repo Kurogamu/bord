@@ -86,7 +86,7 @@
 
 (defn table-meta-payload [state]
   (-> state
-    (select-keys [:name :updated :count])
+    (select-keys [:name :updated :count :sort-columns])
     (assoc 
       :tableId (:id state)
       :created (if (:new state) (js/Date.now) (:created state))
@@ -123,15 +123,6 @@
       :placeholder "New table name"
       :on-change #(swap! table-editor-state assoc :name (.. % -target -value))}]]])
 
-(defn table-editor-column-set []
-  [:div {:class "editor-section column-set-editor"}
-   [:h3 "Columns"]
-   (doall (for [column-id (:sort-columns @table-editor-state)]
-            (table-editor-column column-id)))
-   [:button {:class "btn add-column-btn"
-             :on-click #(add-column nil table-editor-state)}
-    "Add column"]])
-
 (defn table-editor-column [column-id]
   [:div {:key column-id :class "column-editor"}
    [:div {:class "input-wr"}
@@ -144,9 +135,18 @@
    [:div {:class "input-wr"}
     [:select
      {:value (get-in @table-editor-state [:columns column-id :type])
-      :on-change #(set-column-type [column-key (.. % -target -value)] table-editor-state)}
+      :on-change #(set-column-type [column-id (.. % -target -value)] table-editor-state)}
      [:option { :value :string } "Text"]
      [:option { :value :number } "Number"]]]])
+
+(defn table-editor-column-set []
+  [:div {:class "editor-section column-set-editor"}
+   [:h3 "Columns"]
+   (doall (for [column-id (:sort-columns @table-editor-state)]
+            (table-editor-column column-id)))
+   [:button {:class "btn add-column-btn"
+             :on-click #(add-column nil table-editor-state)}
+    "Add column"]])
 
 
 (defn table-cell-editor []
