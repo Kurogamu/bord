@@ -59,7 +59,7 @@
     (set! (.-onerror transaction) on-error)
     transaction))
 
-(defn add-table [{:as args :keys [data on-complete on-error]}]
+(defn store-table [{:as args :keys [data on-complete on-error]}]
   (let [store-names [meta-store-name column-store-name fragment-store-name]
         transaction (-> args
                         (select-keys [:on-complete :on-error])
@@ -71,9 +71,6 @@
     (doseq [column (:columns data)] (.add column-store (clj->js column)))
     (.add meta-store (clj->js (:meta data)))
     (.add row-store (clj->js (:rows data)))))
-
-(defn update-table [{:as args :keys [data on-complete on-error]}]
-  (add-table args))
 
 (defn read-all-store [store on-complete]
   (let [result (r/atom [])]
@@ -108,9 +105,12 @@
                         :on-complete #(js/console.info "Cursor completed")
                         :on-error #(js/console.error "Cursor failed: " %)})
         on-store-complete (fn [key store-result]
-                            (swap! results assoc key (js->clj store-result {:keywordize-keys true}))
+                            (swap! results assoc
+                                   key (js->clj store-result {:keywordize-keys true}))
                             (compose-results @results on-complete))]
-    (read-all-store (.objectStore transaction meta-store-name) #(on-store-complete :meta %))
-    (read-all-store (.objectStore transaction column-store-name) #(on-store-complete :columns %))
-    (read-all-store (.objectStore transaction fragment-store-name) #(on-store-complete :fragments %))
-    ))
+    (read-all-store (.objectStore transaction meta-store-name)
+                    #(on-store-complete :meta %))
+    (read-all-store (.objectStore transaction column-store-name)
+                    #(on-store-complete :columns %))
+    (read-all-store (.objectStore transaction fragment-store-name)
+                    #(on-store-complete :fragments %))))

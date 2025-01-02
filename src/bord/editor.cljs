@@ -6,17 +6,19 @@
     ["react" :as react]))
 
 (defn table-editor-default-column []
-   {:id (js/crypto.randomUUID)
+   {:action :create
+    :id (js/crypto.randomUUID)
     :type "string"})
 
 (defn table-editor-default-state []
   (let [column (table-editor-default-column)]
-    {:new true
+    {:action :create
      :id (js/crypto.randomUUID)
      :name ""
      :columns {(:id column) column}
      :sort-columns [(:id column)]
      :rows [{}]
+     :rows-changed true
      :active-cell nil
      :count 0}))
 
@@ -24,30 +26,36 @@
 
 (defn table-editor-init-state
   ([] (reset! table-editor-state (table-editor-default-state)))
-  ([data] (reset! table-editor-state {:new false
-                                      :id (.-tableId data)
-                                      :name (.-name data)
-                                      :columns []
-                                      :rows []
-                                      :active-cell nil
-                                      :edit-cell ""
-                                      :count 0})))
+  ([data]
+   (js/console.log data)
+   (reset! table-editor-state 
+           (-> data
+               (select-keys [:id :name :sort-columns :columns :rows])
+               (assoc :action :update
+                      :active-cell nil
+                      :edit-cell "")))))
 
 (defn apply-edit-cell [state]
   (if (some? (:active-cell state))
     (let [[active-row active-column] (:active-cell state)
           updated-rows (assoc-in (:rows state) (:active-cell state) (:edit-cell state))]
-      (assoc state :rows updated-rows :edit-cell ""))
+      (assoc state :rows updated-rows :edit-cell "" :rows-changed true))
     state))
 
 (defn add-column [msg state]
   (let [new-column (table-editor-default-column)]
-    (swap! state (fn [state] (-> state
-                      (update :sort-columns #(conj % (:id new-column)))
-                      (assoc-in [:columns (:id new-column)] new-column))))))
+    (swap! state
+           (fn [prev-state]
+             (-> prev-state
+                 (update :sort-columns #(conj % (:id new-column)))
+                 (assoc-in [:columns (:id new-column)] new-column))))))
 
 (defn add-row [msg state]
-  (swap! state update-in [:rows] #(conj % (or msg {}))))
+  (swap! state
+         (fn [prev-state]
+           (-> prev-state
+               (assoc :rows-changed true)
+               (update-in [:rows] #(conj % (or msg {})))))))
 
 (defn unset-active-cell [msg state]
   (swap! state #(-> %
@@ -86,26 +94,28 @@
 
 (defn table-meta-payload [state]
   (-> state
-    (select-keys [:name :updated :count :sort-columns])
+    (select-keys [:action :name :updated :count :sort-columns])
     (assoc 
       :tableId (:id state)
-      :created (if (:new state) (js/Date.now) (:created state))
+      :created (if (= (:action state) :create) (js/Date.now) (:created state))
       :updated (js/Date.now))))
 
 (defn columns-payload [state]
   (map (fn [column]
          {:tableId (:id state)
           :columnId (:id column)
+          :action (:action column)
           :type (:type column)
           :name (:name column)})
        (vals (:columns state))))
 
-(defn rows-payload [state]
-  {:fragmentId (js/crypto.randomUUID)
-   :tableId (:id state)
-   :first-row 0
-   :last-row (count (:rows state))
-   :data (:rows state)})
+(defn rows-payload [state] ; SOLVE THIS
+  (if (:rows-changed state)
+    {:fragmentId (js/crypto.randomUUID)
+     :tableId (:id state)
+     :first-row 0
+     :last-row (count (:rows state))
+     :data (:rows state)}))
 
 (defn table-data-payload [state]
   {:meta (table-meta-payload state)
@@ -205,8 +215,8 @@
 
 (defn table-editor [{:keys [on-save on-close]}]
   (js/console.log (str @table-editor-state))
-  (let [new-table (:new @table-editor-state)
-        save-text (if new-table "Create" "Update")]
+  (let [is-new-table (= (:create (:action @table-editor-state)))
+        save-text (if is-new-table "Create" "Update")]
     [:div {:class "modal"}
      [:div {:class "modal-header"} "Table Editor"]
      [:div {:class "modal-body"}

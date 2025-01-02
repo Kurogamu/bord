@@ -3,7 +3,7 @@
     [bord.common :refer [keycodes]]
     [bord.editor :refer [table-editor table-editor-init-state]]
     [cljs.core.async :refer [go go-loop chan put!]]
-    [bord.data :refer [db-init add-table update-table read-all]]
+    [bord.data :refer [db-init store-table read-all]]
     [reagent.core :as r]
     [reagent.dom :as d]
     ["react" :as react]
@@ -44,20 +44,15 @@
 (defn read-tables [state]
   (let [tables (r/atom [])]
     (set-tables-loading true state)
-    ; (read-all #(js/console.log (clj->js %))))) ;
     (read-all #(set-tables % state))))
 
 (defn save-table [state table-data]
   (close-editor nil state)
   (let [success-callback #(read-tables state)
         error-callback #(js/console.error "Failed to write table!" %)]
-    (if (some? (:tableId table-data))
-      (update-table {:data table-data
-                     :on-complete success-callback
-                     :on-error error-callback})
-      (add-table {:data table-data
+    (store-table {:data table-data
                   :on-complete success-callback
-                  :on-error error-callback}))))
+                  :on-error error-callback})))
 
 ;; -------------------------
 ;; View
@@ -89,7 +84,6 @@
                        :column (get (:columns table) column-id)}])])]])
 
 (defn data-table [data]
-  (js/console.log (str data))
   [:div {:class "table-container"}
    (for [entry data]
      [:div {:key (:tableId entry)
