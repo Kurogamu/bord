@@ -3,6 +3,7 @@
     [reagent.core :as r]
     [reagent.dom :as d]
     [clojure.string :refer [blank?]]
+    [bord.data :refer [read-table-fragments]]
     ["react" :as react]))
 
 (defn table-editor-default-column []
@@ -18,11 +19,33 @@
      :columns {(:id column) column}
      :sort-columns [(:id column)]
      :rows [{}]
+     :loading false
      :rows-changed true
      :active-cell nil
      :count 0}))
 
+(defn default-fragment
+  ([first-row last-row]
+   {:fragmentId (js/crypto.randomUUID)
+    :tableId (:id state)
+    :first-row first-row
+    :last-row last-row
+    :data (:rows state)})
+  ([] (default-fragment 0 (count (:rows state)))))
+
 (defonce table-editor-state (r/atom nil))
+
+(defn read-fragment-callback [cursor state]
+  (if (some? cursor)
+    (swap! state assoc :current-fragment (.-value cursor) :loading false)))
+
+(defn read-fragments [state]
+  (swap! state assoc :loading true)
+  (read-table-fragments
+    {:table-id (:id state)
+     :cursor-callback #(read-fragment-callback % state)
+     :on-complete #(js/console.log "frag read complete " %)
+     :on-error #(js/console.log "frag read error " %)}))
 
 (defn table-editor-init-state
   ([] (reset! table-editor-state (table-editor-default-state)))
@@ -30,7 +53,7 @@
    (js/console.log data)
    (reset! table-editor-state 
            (-> data
-               (select-keys [:id :name :sort-columns :columns :rows])
+               (select-keys [:id :name :sort-columns :columns])
                (assoc :action :update
                       :active-cell nil
                       :edit-cell "")))))
@@ -109,17 +132,8 @@
           :name (:name column)})
        (vals (:columns state))))
 
-(defn rows-payload [state] ; SOLVE THIS
-  (if (:rows-changed state)
-    {:fragmentId (js/crypto.randomUUID)
-     :tableId (:id state)
-     :first-row 0
-     :last-row (count (:rows state))
-     :data (:rows state)}))
-
 (defn table-data-payload [state]
   {:meta (table-meta-payload state)
-   :rows (rows-payload state)
    :columns (columns-payload state)})
 
 (defn table-editor-name []

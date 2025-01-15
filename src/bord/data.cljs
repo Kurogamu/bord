@@ -1,35 +1,45 @@
 (ns bord.data
   (:require 
-    [clojure.walk :refer [stringify-keys]]
+    [clojure.walk :refer [keywordize-keys stringify-keys postwalk]]
     [reagent.core :as r]))
 
 (defonce loaded-db (r/atom nil))
 (def db-name "bord-default")
-(def db-version 7)
+(def db-version 10)
 (def meta-store-name "table-meta")
 (def fragment-store-name "table-fragment")
-(def column-store-name "table-column")
+
+(defn stored-entry->clj [entry]
+  (-> entry
+      js->clj
+      (update-keys #(clojure.string/replace % #"_" "-"))
+      (update-keys keyword)
+      (update-in [:columns] update-vals #(update-keys % keyword))))
+
+(defn stored->clj [data]
+  (->> data
+      js->clj
+      (map stored-entry->clj)))
+
+(defn clj->stored-entry [entry]
+  (-> entry
+      (update-keys name)
+      (update-keys #(clojure.string/replace % #"-" "_"))
+      clj->js))
+
 
 (defn init-table-meta-store [db]
   (let [store (.createObjectStore
-                db meta-store-name #js {"keyPath" "tableId"})]
+                db meta-store-name #js {"keyPath" "id"})]
     (.createIndex store "name" "name" #js {"unique" false})
-    (.createIndex store "created_at" "created_at" #js {"unique" false})
-    (.createIndex store "updated_at" "updated_at" #js {"unique" false})
-    (.createIndex store "count" "count" #js {"unique" false})))
-
-(defn init-table-column-store [db]
-  (let [store (.createObjectStore
-                db column-store-name #js {"keyPath" "columnId"})]
-    (.createIndex store "tableId" "tableId" #js {"unique" false})
-    (.createIndex store "name" "name" #js {"unique" false})
-    (.createIndex store "type" "type" #js {"unique" false})))
+    (.createIndex store "created" "created_at" #js {"unique" false})
+    (.createIndex store "updated" "updated_at" #js {"unique" false})))
 
 (defn init-table-fragment-store [db]
   (let [store (.createObjectStore
-                db fragment-store-name #js {"keyPath" "fragmentId"})]
-    (.createIndex store "tableId" "tableId" #js {"unique" false})
-    (.createIndex store "row" "row" #js {"unique" false})))
+                db fragment-store-name #js {"keyPath" "id"})]
+    (.createIndex store "table" "table_id" #js {"unique" false})
+    (.createIndex store "row" ["table_id" "first_row"] #js {"unique" true})))
 
 (defn db-init-onsuccess [request callback]
   (reset! loaded-db (.-result request))
@@ -41,7 +51,6 @@
     (set! (.-oncomplete transaction) on-success)
     (set! (.-onerror db) on-error)
     (init-table-meta-store db)
-    (init-table-column-store db)
     (init-table-fragment-store db)
     (reset! loaded-db db)))
 
@@ -59,22 +68,25 @@
     (set! (.-onerror transaction) on-error)
     transaction))
 
-(defn store-table [{:as args :keys [data on-complete on-error]}]
-  (let [store-names [meta-store-name column-store-name fragment-store-name]
-        transaction (-> args
+(defn put-meta [{:as args :keys [data on-complete on-error]}]
+  (let [transaction (-> args
                         (select-keys [:on-complete :on-error])
-                        (assoc :store-names store-names :command "readwrite")
+                        (assoc :store-names [meta-store-name] :command "readwrite")
                         get-transaction)
-        meta-store (.objectStore transaction meta-store-name)
-        column-store (.objectStore transaction column-store-name)
-        row-store (.objectStore transaction fragment-store-name)]
-    (doseq [column (:columns data)] (.add column-store (clj->js column)))
-    (.add meta-store (clj->js (:meta data)))
-    (.add row-store (clj->js (:rows data)))))
+        meta-store (.objectStore transaction meta-store-name)]
+    (.put meta-store (clj->stored-entry data))))
 
-(defn read-all-store [store on-complete]
+(defn read-first-cursor [store on-complete]
+  (set! (.-onsuccess store)
+        (fn [event]
+          (let [cursor (.. event -target -result)]
+            (if (some? cursor)
+              (on-complete (.-value cursor))
+              (on-complete nil))))))
+
+(defn read-all-cursor [store on-complete]
   (let [result (r/atom [])]
-    (set! (.-onsuccess (.openCursor store))
+    (set! (.-onsuccess store)
           (fn [event]
             (let [cursor (.. event -target -result)]
               (if (some? cursor)
@@ -83,34 +95,60 @@
                   (.continue cursor))
                 (on-complete @result)))))))
 
+(defn read-table-fragments [{:as args :keys [table-id cursor-callback on-complete on-error]}]
+  (let [transaction (-> args
+                        (select-keys [:on-complete :on-error])
+                        (assoc :store-names [fragment-store-name] :command "read")
+                        get-transaction)
+        store (.objectStore transaction fragment-store-name)
+        index (.index store "table_id")
+        cursor (.openCursor index)]
+    (set! (.-onsuccess cursor) #(cursor-callback (.. % -target -result)))))
+
+(defn put-fragment [{:as args :keys [data on-complete on-error]}]
+  (let [transaction (-> args
+                        (select-keys [:on-complete :on-error])
+                        (assoc :store-names [fragment-store-name] :command "readwrite")
+                        get-transaction)
+        fragment-store (.objectStore transaction fragment-store-name)]
+    (.put fragment-store (clj->stored-entry data))))
+
 (defn compose-results [results callback]
-  (if (every? #(contains? results %) '(:meta :columns :fragments))
-    (let [columns (reduce (fn [m column]
-                            (assoc-in m [(:tableId column) (:columnId column)] column))
-                          {}
-                          (:columns results))
-          fragments (group-by :tableId (:fragments results))]
-      (callback (map (fn [table] (assoc table
-                         :columns (get columns (:tableId table))
-                         :rows (map stringify-keys
-                                    (mapcat :data (get fragments (:tableId table))))))
-                     (:meta results))))))
+  (if (every? #(contains? results %) '(:meta :fragments))
+    (let [fragments (group-by :table-id (:fragments results))]
+      (callback (map #(assoc % :rows (get-in fragments [(:id %) 0 :data])) (:meta results))))))
 
 (defn read-all [on-complete]
   (let [results (r/atom {})
-        store-names [meta-store-name column-store-name fragment-store-name]
+        store-names [meta-store-name fragment-store-name]
         transaction (get-transaction 
                       {:store-names store-names
                         :command "readonly"
                         :on-complete #(js/console.info "Cursor completed")
                         :on-error #(js/console.error "Cursor failed: " %)})
-        on-store-complete (fn [key store-result]
+        on-store-complete (fn [store-key store-result]
                             (swap! results assoc
-                                   key (js->clj store-result {:keywordize-keys true}))
+                                   store-key (stored->clj store-result))
                             (compose-results @results on-complete))]
-    (read-all-store (.objectStore transaction meta-store-name)
+    (read-all-cursor (.openCursor (.objectStore transaction meta-store-name))
                     #(on-store-complete :meta %))
-    (read-all-store (.objectStore transaction column-store-name)
-                    #(on-store-complete :columns %))
-    (read-all-store (.objectStore transaction fragment-store-name)
+    (read-all-cursor (.openCursor (.objectStore transaction fragment-store-name))
                     #(on-store-complete :fragments %))))
+
+(defn fetch-fragment [{:keys [table-id row-number on-complete]}]
+  (let [params (clj->js [table-id, row-number])
+        cursor-range (js/window.IDBKeyRange.lowerBound params)
+        transaction (get-transaction 
+                      {:store-names [fragment-store-name]
+                        :command "readonly"
+                        :on-complete #(js/console.info "Fragment fetched")
+                        :on-error #(js/console.error "Fragment fetch failed: " %)})
+        cursor-callback (fn [result]
+                          (if (some? result)
+                            (on-complete (stored-entry->clj result))
+                            (on-complete nil)))]
+    (-> transaction
+        (.objectStore fragment-store-name)
+        (.index "row")
+        (.openCursor cursor-range)
+        (read-first-cursor cursor-callback))))
