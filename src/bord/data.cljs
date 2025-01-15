@@ -95,6 +95,16 @@
                   (.continue cursor))
                 (on-complete @result)))))))
 
+(defn delete-all-cursor [store on-complete]
+  (set! (.-onsuccess store)
+        (fn [event]
+          (let [cursor (.. event -target -result)]
+            (if (some? cursor)
+              (do
+                (.delete cursor)
+                (.continue cursor))
+              (on-complete))))))
+
 (defn read-table-fragments [{:as args :keys [table-id cursor-callback on-complete on-error]}]
   (let [transaction (-> args
                         (select-keys [:on-complete :on-error])
@@ -135,6 +145,17 @@
     (read-all-cursor (.openCursor (.objectStore transaction fragment-store-name))
                     #(on-store-complete :fragments %))))
 
+(defn read-all-tables [on-complete]
+  (let [transaction-params
+        {:store-names [meta-store-name]
+         :command "readonly"
+         :on-complete #(js/console.info "Cursor completed")
+         :on-error #(js/console.error "Cursor failed: " %)}]
+    (-> (get-transaction transaction-params)
+        (.objectStore meta-store-name)
+        .openCursor
+        (read-all-cursor #(on-complete (stored->clj %))))))
+
 (defn fetch-fragment [{:keys [table-id row-number on-complete]}]
   (let [params (clj->js [table-id, row-number])
         cursor-range (js/window.IDBKeyRange.lowerBound params)
@@ -152,3 +173,17 @@
         (.index "row")
         (.openCursor cursor-range)
         (read-first-cursor cursor-callback))))
+
+(defn delete-table [{:keys [table-id on-complete]}]
+  (let [store-names [meta-store-name fragment-store-name]
+        transaction-params {:store-names store-names
+                            :command "readwrite"
+                            :on-complete on-complete
+                            :on-error #(js/console.error "Data deletion failed: " %)}]
+    (doto (get-transaction transaction-params)
+      (-> (.objectStore meta-store-name)
+          (.delete table-id))
+      (-> (.objectStore fragment-store-name)
+          (.index "table")
+          (.openCursor (js/window.IDBKeyRange.only table-id))
+          (delete-all-cursor #(js/console.log "fragments deleted"))))))

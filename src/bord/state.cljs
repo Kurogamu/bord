@@ -23,6 +23,7 @@
                  (if (some? table-index)
                    (assoc-in state [:tables table-index] value)
                    (update-in state [:tables] #(conj % value))))
+    :delete-table (assoc state :tables (filterv #(not= (:id %) (:id value)) (:tables state)))
     :set-tables (assoc state :tables (vec value) :tables-loading false)
     :set-tables-loading (assoc state :tables-loading value)
     :open-editor-table (assoc state :table-editor {:meta value})

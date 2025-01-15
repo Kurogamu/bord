@@ -3,7 +3,7 @@
     [reagent.core :as r]
     [clojure.string :refer [blank?]]
     [bord.state :refer [app-state emit]]
-    [bord.data :refer [fetch-fragment put-meta put-fragment]]
+    [bord.data :refer [fetch-fragment put-meta put-fragment delete-table]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
 
@@ -32,7 +32,8 @@
      :updated (js/Date.now)
      :columns {(:id column) column}
      :sort-columns [(:id column)]
-     :count 0}))
+     :data-preview []
+     :count 1}))
 
 
 ;; -------------------------
@@ -56,30 +57,52 @@
               [(inc row) (first sort-columns)])
       [row column-id])))
 
+(defn update-data-preview [state]
+  (let [preview-row-count (min (get-in state [:table-editor :meta :count]) 5)
+        preview-rows (subvec 
+                       (get-in state [:table-editor :fragment :data])
+                       0
+                       preview-row-count)]
+    (assoc-in state [:table-editor :meta :data-preview] preview-rows)))
+
 (defn handler [state [event value]]
   (case event
     :set-table-name (assoc-in state [:table-editor :meta :name] value)
     :set-column-name 
-      (let [[id name] value]
-        (assoc-in state [:table-editor :meta :columns id :name] name))
+    (let [[id name] value]
+      (assoc-in state [:table-editor :meta :columns id :name] name))
+
     :set-column-type
-      (let [[id type] value]
-        (assoc-in state [:table-editor :meta :columns id :type] type))
+    (let [[id type] value]
+      (assoc-in state [:table-editor :meta :columns id :type] type))
+
     :add-column 
-      (let [new-column (init-column-data)]
-        (-> state
+    (let [new-column (init-column-data)]
+      (-> state
           (assoc-in [:table-editor :meta :columns (:id new-column)] new-column)
           (update-in [:table-editor :meta :sort-columns] #(conj % (:id new-column)))))
-    :edit-cell (assoc-in state
-                         (concat [:table-editor :fragment :data] (get-in state [:table-editor :active-cell]))
-                         value)
+
+    :edit-cell
+    (let [cell-path (concat
+                      [:table-editor :fragment :data]
+                      (get-in state [:table-editor :active-cell]))]
+      (-> state
+          (assoc-in cell-path value)
+          update-data-preview))
+
     :unset-active-cell (assoc-in state [:table-editor :active-cell] nil)
     :move-active-cell (assoc-in state
                                 [:table-editor :active-cell]
                                 (calculate-move-cell state value))
+
     :set-active-cell (assoc-in state [:table-editor :active-cell] value)
     :set-fragment (assoc-in state [:table-editor :fragment] value)
-    :add-row (update-in state [:table-editor :fragment :data] #(conj % {}))
+    :add-row
+    (-> state
+        (update-in [:table-editor :fragment :data] #(conj % {}))
+        (update-in [:table-editor :meta :count] inc)
+        update-data-preview)
+
     state))
 
 ;; -------------------------
@@ -168,6 +191,13 @@
   (store-meta)
   (store-fragment)
   (emit [:close-editor nil]))
+
+(defn delete []
+  (let [table (:meta @editor-cursor)
+        delete-callback #(emit [:delete-table table])]
+    (emit [:close-editor nil])
+    (delete-table {:table-id (:id table)
+                   :on-complete #(emit [:delete-table table])})))
 
 ;; -------------------------
 ;; View
@@ -268,6 +298,9 @@
      [editor-columns]
      [editor-data]]]
    [:div {:class "modal-footer"}
+    [:button {:class "delete"
+              :on-click delete}
+     "Delete"]
     [:button {:class "close"
               :on-click close-editor}
      "Close"]]])

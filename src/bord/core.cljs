@@ -3,7 +3,7 @@
     [bord.state :refer [app-state emit]]
     [bord.table-editor :refer [load-table-editor table-editor]]
     [cljs.core.async :refer [go go-loop chan put!]]
-    [bord.data :refer [db-init read-all]]
+    [bord.data :refer [db-init read-all-tables]]
     [reagent.core :as r]
     [reagent.dom :as d]
     ["react" :as react]
@@ -15,7 +15,7 @@
 
 (defn read-tables [state]
   (emit [:set-tables-loading true])
-  (read-all #(emit [:set-tables %])))
+  (read-all-tables #(emit [:set-tables %])))
 
 ;; -------------------------
 ;; View
@@ -42,11 +42,11 @@
       (for [column-id (:sort-columns table)]
         [:th {:key column-id}
          (-> table (get-in [:columns column-id :name]) str)])]
-     (for [[row-index row-data] (map-indexed vector (:rows table))]
+     (for [[row-index row-data] (map-indexed vector (:data-preview table))]
        [:tr {:key row-index}
         (for [column-id (:sort-columns table)]
          [render-cell {:key column-id
-                        :data (get row-data column-id)}])])]])
+                       :data (get row-data column-id)}])])]])
 
 (defn data-table [data]
   [:div {:class "table-container"}
