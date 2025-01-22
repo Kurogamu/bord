@@ -5,16 +5,28 @@
 
 (defonce loaded-db (r/atom nil))
 (def db-name "bord-default")
-(def db-version 10)
+(def db-version 11)
 (def meta-store-name "table-meta")
 (def fragment-store-name "table-fragment")
+(def function-store-name "function")
+
+; If the key is a UUID we'd rather treat it as a string
+(def nested-id-maps [:columns :operations])
+; (filter #(contains? % (keys entry)) id-maps)
+
+(defn nested-id-map->clj [entry]
+  (let [id-map-keys (filter #(contains? entry %) nested-id-maps)]
+    (reduce
+      (fn [e k] (update-in e [k] update-vals #(update-keys % keyword)))
+      entry
+      id-map-keys)))
 
 (defn stored-entry->clj [entry]
   (-> entry
       js->clj
       (update-keys #(clojure.string/replace % #"_" "-"))
       (update-keys keyword)
-      (update-in [:columns] update-vals #(update-keys % keyword))))
+      nested-id-map->clj))
 
 (defn stored->clj [data]
   (->> data
@@ -41,6 +53,9 @@
     (.createIndex store "table" "table_id" #js {"unique" false})
     (.createIndex store "row" ["table_id" "first_row"] #js {"unique" true})))
 
+(defn init-function-store [db]
+  (.createObjectStore db function-store-name #js {"keyPath" "id"}))
+
 (defn db-init-onsuccess [request callback]
   (reset! loaded-db (.-result request))
   (callback))
@@ -52,6 +67,7 @@
     (set! (.-onerror db) on-error)
     (init-table-meta-store db)
     (init-table-fragment-store db)
+    (init-function-store db)
     (reset! loaded-db db)))
 
 (defn db-init [{:keys [on-success on-error]}]
@@ -67,14 +83,6 @@
     (set! (.-oncomplete transaction) on-complete)
     (set! (.-onerror transaction) on-error)
     transaction))
-
-(defn put-meta [{:as args :keys [data on-complete on-error]}]
-  (let [transaction (-> args
-                        (select-keys [:on-complete :on-error])
-                        (assoc :store-names [meta-store-name] :command "readwrite")
-                        get-transaction)
-        meta-store (.objectStore transaction meta-store-name)]
-    (.put meta-store (clj->stored-entry data))))
 
 (defn read-first-cursor [store on-complete]
   (set! (.-onsuccess store)
@@ -115,6 +123,14 @@
         cursor (.openCursor index)]
     (set! (.-onsuccess cursor) #(cursor-callback (.. % -target -result)))))
 
+(defn put-meta [{:as args :keys [data on-complete on-error]}]
+  (let [transaction (-> args
+                        (select-keys [:on-complete :on-error])
+                        (assoc :store-names [meta-store-name] :command "readwrite")
+                        get-transaction)
+        meta-store (.objectStore transaction meta-store-name)]
+    (.put meta-store (clj->stored-entry data))))
+
 (defn put-fragment [{:as args :keys [data on-complete on-error]}]
   (let [transaction (-> args
                         (select-keys [:on-complete :on-error])
@@ -122,6 +138,14 @@
                         get-transaction)
         fragment-store (.objectStore transaction fragment-store-name)]
     (.put fragment-store (clj->stored-entry data))))
+
+(defn put-function [{:as args :keys [data on-complete on-error]}]
+  (let [transaction-args (-> args
+                        (select-keys [:on-complete :on-error])
+                        (assoc :store-names [function-store-name] :command "readwrite"))]
+    (-> (get-transaction transaction-args)
+        (.objectStore function-store-name)
+        (.put (clj->stored-entry data)))))
 
 (defn compose-results [results callback]
   (if (every? #(contains? results %) '(:meta :fragments))
@@ -156,6 +180,17 @@
         .openCursor
         (read-all-cursor #(on-complete (stored->clj %))))))
 
+(defn read-all-functions [on-complete]
+  (let [transaction-params
+        {:store-names [function-store-name]
+         :command "readonly"
+         :on-complete #(js/console.info "Cursor completed")
+         :on-error #(js/console.error "Cursor failed: " %)}]
+    (-> (get-transaction transaction-params)
+        (.objectStore function-store-name)
+        .openCursor
+        (read-all-cursor #(on-complete (stored->clj %))))))
+
 (defn fetch-fragment [{:keys [table-id row-number on-complete]}]
   (let [params (clj->js [table-id, row-number])
         cursor-range (js/window.IDBKeyRange.lowerBound params)
@@ -187,3 +222,12 @@
           (.index "table")
           (.openCursor (js/window.IDBKeyRange.only table-id))
           (delete-all-cursor #(js/console.log "fragments deleted"))))))
+
+(defn delete-function [{:keys [function-id on-complete]}]
+  (let [transaction-params {:store-names [function-store-name]
+                            :command "readwrite"
+                            :on-complete on-complete
+                            :on-error #(js/console.error "Data deletion failed: " %)}]
+    (-> (get-transaction transaction-params)
+        (.objectStore function-store-name)
+        (.delete function-id))))

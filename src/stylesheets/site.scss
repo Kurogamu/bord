@@ -221,7 +221,7 @@ body {
   }
 }
 
-.table {
+.card {
   border: $border-color .1em solid;
   border-radius: 0 .25em .25em .25em;
   margin: 1em 2em;
@@ -229,6 +229,10 @@ body {
   background-color: $table-background-color;
   cursor: pointer;
   flex: 0 1 auto;
+
+  &-function {
+    border-radius: 0 2em 2em 2em;
+  }
 
   &-header {
     font-weight: 600;
@@ -292,4 +296,10 @@ body {
     flex-flow: wrap;
     justify-content: space-evenly;
   }
+}
+
+.input-modal {
+  &-inactive {
+    display: none;
+  } 
 }

@@ -2,8 +2,9 @@
   (:require
     [bord.state :refer [app-state emit]]
     [bord.table-editor :refer [load-table-editor table-editor]]
+    [bord.function-editor :refer [load-function-editor function-editor]]
     [cljs.core.async :refer [go go-loop chan put!]]
-    [bord.data :refer [db-init read-all-tables]]
+    [bord.data :refer [db-init read-all-tables read-all-functions]]
     [reagent.core :as r]
     [reagent.dom :as d]
     ["react" :as react]
@@ -13,9 +14,17 @@
 ;; -------------------------
 ;; Task
 
-(defn read-tables [state]
+(defn read-tables []
   (emit [:set-tables-loading true])
   (read-all-tables #(emit [:set-tables %])))
+
+(defn read-functions []
+  (emit [:set-functions-loading true])
+  (read-all-functions #(emit [:set-functions %])))
+
+(defn read-db []
+  (read-tables)
+  (read-functions))
 
 ;; -------------------------
 ;; View
@@ -25,9 +34,12 @@
    [:div {:class "left-group"}
     [:button {:class "btn add-table-btn"
               :on-click #(load-table-editor :new)}
-     "Add table"]]
+     "Add table"]
+    [:button {:class "btn add-fn-btn"
+              :on-click #(load-function-editor :new)}
+     "Add function"]]
    [:div {:class "center-group"}
-    [:div {:class "title"} "Bord"]]
+    [:div {:class "title"} "[Bord]"]]
    [:div {:class "right-group"}]])
 
 (defn render-cell [{:keys [data]}]
@@ -36,7 +48,7 @@
     [:td {:class "blank"} "Blank"]))
 
 (defn render-table-data [table]
-  [:div {:class "table-content"}
+  [:div {:class "card-content table"}
     [:table
      [:tr
       (for [column-id (:sort-columns table)]
@@ -49,23 +61,42 @@
                        :data (get row-data column-id)}])])]])
 
 (defn data-table [data]
-  [:div {:class "table-container"}
+  [:div {:class "card-container table-container"}
    (for [entry data]
      [:div {:key (:id entry)
-            :class "table"
+            :class "card card-table"
             :on-click #(load-table-editor entry)}
-      [:div {:class "table-header"}
+      [:div {:class "card-header"}
        (:name entry)]
-      [:div {:class "table-subheader"}
+      [:div {:class "card-subheader"}
        (.toLocaleString (js/Date. (:updated entry)))]
       (render-table-data entry)])])
 
+(defn functions [entries]
+  [:div {:class "card-container functions-container"}
+   (for [entry entries]
+     [:div {:key (:id entry)
+            :class "card card-function"
+            :on-click #(load-function-editor entry)}
+      [:div {:class "card-header"}
+       (:name entry)]
+      [:div {:class "card-subheader"}
+       (.toLocaleString (js/Date. (:updated entry)))]])])
+
 (defn main [state]
   [:div {:class "main"}
-   (if (count (:tables @app-state)) (data-table (:tables @app-state)))
-   (if (:tables-loading @app-state) [:div "loading tables..."])
+   (if (count (:tables @app-state))
+     (data-table (:tables @app-state)))
+   (if (:tables-loading @app-state)
+     [:div "loading tables..."])
+   (if (count (:functions @app-state))
+     (functions (:functions @app-state)))
+   (if (:functions-loading @app-state)
+     [:div "loading functions..."])
    (if (some? (:table-editor @app-state))
-     [table-editor])])
+     [table-editor])
+   (if (some? (:function-editor @app-state))
+     [function-editor])])
 
 (defn app-root [state]
   [:div {:class "app-root"}
@@ -83,7 +114,7 @@
     (let [pressed-key (<! keydown-ch)]
       (if (not= last-pressed pressed-key)
         (case pressed-key
-          "t" (if (nil? (:table-editor @app-state))
+          "t" (if (and (nil? (:table-editor @app-state)) (nil? (:function-editor @app-state)))
                 (load-table-editor :new))
           "Escape" (emit [:close-editor nil])
           nil))
@@ -96,7 +127,7 @@
 (defn mount-root [] (d/render [app-root] (.getElementById js/document "app")))
 
 (defn init-db []
-  (let [on-success #(read-tables app-state)
+  (let [on-success read-db
         on-error #(js/console.error "Failed to init db!" %)]
     (db-init {:on-success on-success :on-error on-error})))
 

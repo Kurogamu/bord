@@ -7,8 +7,10 @@
 
 (def default-state
   {:tables []
-   :editor nil
-   :tables-loading false})
+   :table-editor nil
+   :function-editor nil
+   :tables-loading false
+   :functions-loading false})
 
 (defonce app-state (r/atom default-state))
 
@@ -26,9 +28,13 @@
     :delete-table (assoc state :tables (filterv #(not= (:id %) (:id value)) (:tables state)))
     :set-tables (assoc state :tables (vec value) :tables-loading false)
     :set-tables-loading (assoc state :tables-loading value)
+    :set-functions (assoc state :functions (vec value) :functions-loading false)
+    :set-functions-loading (assoc state :functions-loading value)
     :open-editor-table (assoc state :table-editor {:meta value})
     :set-editor-table (assoc-in state [:table-editor :meta] value)
-    :close-editor (assoc state :table-editor nil)
+    :close-editor (assoc state :table-editor nil :function-editor nil)
+    :open-editor-function (assoc state :function-editor {:data value})
+    :set-editor-function (assoc-in state [:function-editor :data] value)
     state))
 
 (defn emit 

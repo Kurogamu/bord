@@ -8,7 +8,9 @@
                       :asset-path "/js"
                       :modules    {:app {:entries [bord.core
                                                    bord.state
-                                                   bord.table-editor]}}
+                                                   bord.select-modal
+                                                   bord.table-editor
+                                                   bord.function-editor]}}
                       :js-options {:js-provider :external :external-index "target/index.js"}
                       :devtools   {:after-load bord.core/mount-root}}}
 

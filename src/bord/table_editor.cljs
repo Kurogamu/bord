@@ -67,6 +67,7 @@
 
 (defn handler [state [event value]]
   (case event
+    :set-updated (assoc-in state [:table-editor :meta :updated] value)
     :set-table-name (assoc-in state [:table-editor :meta :name] value)
     :set-column-name 
     (let [[id name] value]
@@ -163,6 +164,7 @@
 
 (defn emit-edit-meta [msg]
   (emit msg handler)
+  (emit [:set-updated (js/Date.now)] handler)
   (debounce-store-meta))
 
 (def store-fragment-queue (r/atom 0))
@@ -185,6 +187,7 @@
 
 (defn emit-edit-fragment [msg]
   (emit msg handler)
+  (emit [:set-updated (js/Date.now)] handler)
   (debounce-store-fragment))
 
 (defn close-editor []
@@ -197,7 +200,7 @@
         delete-callback #(emit [:delete-table table])]
     (emit [:close-editor nil])
     (delete-table {:table-id (:id table)
-                   :on-complete #(emit [:delete-table table])})))
+                   :on-complete delete-callback})))
 
 ;; -------------------------
 ;; View
