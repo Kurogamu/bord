@@ -18,27 +18,77 @@
     (->> (:tables state)
         (filter #(= source-id (:id %)))
         first
-        :columns
-        vals
-        )))
+        :columns)))
 
 (defn init-function-data []
   {:id (js/crypto.randomUUID)
    :name ""
    :created (js/Date.now)
    :updated (js/Date.now)
-   :sort-outputs []
-   :outputs {}
+   :outputs []
    :type :map
    :formula ""})
 
+(def const-operations
+  [{:key :number-constant
+    :label "Numeric Constant"
+    :type :input-number}
+   {:key :text-constant
+      :label "Text Constant"
+      :type :input-text}])
+
+(def map-operations
+  [{:key :sum
+    :label "Sum"
+    :type :source-number}
+   {:key :negative
+    :label "Negative"
+    :type :source-number}
+   {:key :product
+    :label "Product"
+    :type :source-number}
+   {:key :inverse
+    :label "Inverse"
+    :type :source-number}
+   {:key :format
+    :label "Format"
+    :type :source-text}])
+
+(def filter-operations
+  [{:key :equals
+    :label "Equals"
+    :type :source-text}
+   {:key :not-equals
+    :label "Not equal"
+    :type :source-text}
+   {:key :contains
+    :label "Contains"
+    :type :source-text}
+   {:key :not-contains
+    :label "Not containing"
+    :type :source-text}])
+
+(def reduce-operations
+  [{:key :sum
+    :label "Sum"
+    :type :source-number}
+   {:key :negative
+    :label "Negative"
+    :type :negative}
+   {:key :concat
+    :label "Concat"
+    :type :source-text}
+   {:key :concat-unique
+    :label "Concat unique"
+    :type :source-text}])
+
 (def function-types
-  [{:key :filter
-    :label "Filter"}
-   {:key :map
-    :label "Map"}
-   {:key :reduce
-    :label "Reduce"}])
+  {"map" {:label "Map"
+          :operations map-operations}
+   "filter" {:label "Filter"
+             :operations filter-operations}
+   "reduce" {:label "Reduce"
+             :operations reduce-operations}})
 
 (def text-filters
   [{:key :equals
@@ -50,10 +100,11 @@
   {:key :not-contains
     :label "Not in"}])
 
-(defn init-operation [label]
+(defn init-operation [name]
   {:id (js/crypto.randomUUID)
-   :operand :vector
-   :label (or label "")
+   :operand nil
+   :name (or name "")
+   :constant ""
    :params #{} })
 
 ;; -------------------------
@@ -63,8 +114,13 @@
   (-> state clj->js js/console.log)
   (case event
     :set-name (assoc-in state [:function-editor :data :name] value)
-    :set-type (assoc-in state [:function-editor :data :type] value)
     :set-source (assoc-in state [:function-editor :data :source] value)
+
+    :set-type
+    (-> state
+        (assoc-in [:function-editor :data :operations] {})
+        (assoc-in [:function-editor :data :sort-operations] [])
+        (assoc-in [:function-editor :data :type] value))
 
     :add-operation 
     (-> state
@@ -79,9 +135,16 @@
     (let [[operator params] value]
       (assoc-in state [:function-editor :data :operations operator :params] params))
 
-    :set-label
-    (let [[operator label] value]
-      (assoc-in state [:function-editor :data :operations operator :label] label))
+    :set-constant
+    (let [[operator constant] value]
+      (assoc-in state [:function-editor :data :operations operator :constant] constant))
+
+    :set-operation-name
+    (let [[operator name] value]
+      (assoc-in state [:function-editor :data :operations operator :name] name))
+
+    :set-outputs
+    (assoc-in state [:function-editor :data :outputs] value)
 
     state))
 
@@ -151,17 +214,6 @@
       :placeholder "New function name"
       :on-change #(emit-edit [:set-name (.. % -target -value)])}]]])
 
-(defn editor-type []
-  [:div {:class "editor-section type-editor"}
-   [:h3 "Function type"]
-   [:div {:class "input-wr"}
-    [:select
-     {:value (get-in @editor-cursor [:data :type])
-      :on-change #(emit-edit [:set-type (.. % -target -value)])}
-      (for [function-type function-types]
-        [:option {:key (:key function-type) :value (:key function-type)}
-         (:label function-type)])]]])
-
 (defn editor-data-source []
   [:div {:class "editor-section data-source-editor"}
    [:h3 "Data source"]
@@ -173,6 +225,27 @@
         [:option {:key (:id table) :value (:id table)}
          (:name table)])]]])
 
+(defn editor-type []
+  [:div {:class "editor-section type-editor"}
+   [:h3 "Function type"]
+   [:div {:class "input-wr"}
+    [:select
+     {:value (get-in @editor-cursor [:data :type])
+      :on-change #(emit-edit [:set-type (.. % -target -value)])}
+      (for [[function-key function-type] function-types]
+        [:option {:key function-key :value function-key}
+         (:label function-type)])]]])
+
+(defn editor-parameters [id operation]
+  [multiselect {:on-change #(emit-edit [:set-params [id %]])
+                :value (:params operation)
+                :options (merge
+                           (get-source-columns @app-state)
+                           (get-in @editor-cursor [:data :operations]))
+                :labelfn :name
+                :ordered true
+                :header "Operator parameters"}])
+
 (defn editor-operator [id]
   (let [operation (get-in @editor-cursor [:data :operations id])]
     [:tr {:key id}
@@ -180,29 +253,34 @@
       [:select
        {:value (:operand operation)
         :on-change #(emit-edit [:set-operand [id (.. % -target -value)]])}
-       (for [op text-filters]
+       (for [op 
+             (concat 
+               (get-in function-types [(get-in @editor-cursor [:data :type]) :operations])
+               const-operations)]
          [:option {:key (:key op) :value (:key op)}
           (:label op)])]]
      [:td
       [multiselect {:on-change #(emit-edit [:set-params [id %]])
                     :value (:params operation)
-                    :options (get-source-columns @app-state)
-                    :keyfn :id
+                    :options (merge
+                               (get-source-columns @app-state)
+                               (get-in @editor-cursor [:data :operations]))
                     :labelfn :name
+                    :ordered true
                     :header "Operator parameters"}]]
      [:td
       [:input
        {:type "text"
-        :value (:label operation)
-        :placeholder "Label"
-        :on-change #(emit-edit [:set-label [id (.. % -target -value)]])}]]
-     ]))
+        :value (:name operation)
+        :placeholder "Name"
+        :on-change #(emit-edit [:set-operation-name [id (.. % -target -value)]])}]]]))
 
 (defn editor-operations []
   [:div {:class "output-operations"}
+   [:h3 "Operations"]
    [:table
     [:tr
-     [:th "Operand"] [:th "Parameters"] [:th "Result"]]
+     [:th "Operand"] [:th "Constant"] [:th "Parameters"] [:th "Label"]]
     (doall
       (for [operation-id (get-in @editor-cursor [:data :sort-operations])]
         (editor-operator operation-id)))]
@@ -211,22 +289,37 @@
     "Add operation"]])
 
 (defn editor-output []
-  [:div {:class "editor-section output-editor-container"}
-   [:h3 "Outputs"]
-   [:div {:class "outputs"}
-    (doall
-      (for [output-id (get-in @editor-cursor [:data :sort-outputs])]
-        (editor-output output-id)))]])
+  (let [options (merge
+                  (get-source-columns @app-state)
+                  (get-in @editor-cursor [:data :operations]))]
+    [:div {:class "editor-section output-editor-container"}
+     [:h3 "Outputs"]
+     [multiselect {:on-change #(emit-edit [:set-outputs %])
+                   :value (get-in @editor-cursor [:data :outputs])
+                   :options options
+                   :labelfn :name
+                   :header "Outputs"}]]))
+
+(defn editor-preview []
+  [:div {:class "editor-section preview"}
+   [:h3 "Preview"]
+   [:table
+    [:tr
+     (doall
+       (for [output-id (get-in @editor-cursor [:data :outputs])]
+       [:th {:key output-id}
+        (or (get-in (get-source-columns @app-state) [output-id :name]) (get-in @editor-cursor [:data :operations output-id :name]))]))]]])
 
 (defn function-editor []
   [:div {:class "modal"}
    [:div {:class "modal-header"} "Function Editor"]
    [:div {:class "modal-body"}
     [editor-name]
-    [editor-type]
     [editor-data-source]
+    [editor-type]
     [editor-operations]
-    [editor-output]]
+    [editor-output]
+    [editor-preview]]
    [:div {:class "modal-footer"}
     [:button {:class "delete"
               :on-click delete}
