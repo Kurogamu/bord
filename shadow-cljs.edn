@@ -8,6 +8,7 @@
                       :asset-path "/js"
                       :modules    {:app {:entries [bord.core
                                                    bord.state
+                                                   bord.function
                                                    bord.select-modal
                                                    bord.table-editor
                                                    bord.function-editor]}}
