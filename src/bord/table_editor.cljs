@@ -15,7 +15,7 @@
 (defn init-column-data []
   {:id (js/crypto.randomUUID)
    :name ""
-   :type "string"})
+    :type :string})
 
 (defn init-fragment-data [table-id]
   {:id (js/crypto.randomUUID)
@@ -59,7 +59,7 @@
 
 (defn update-data-preview [state]
   (let [preview-row-count (min (get-in state [:table-editor :meta :count]) 5)
-        preview-rows (subvec 
+        preview-rows (subvec
                        (get-in state [:table-editor :fragment :data])
                        0
                        preview-row-count)]
@@ -69,7 +69,7 @@
   (case event
     :set-updated (assoc-in state [:table-editor :meta :updated] value)
     :set-table-name (assoc-in state [:table-editor :meta :name] value)
-    :set-column-name 
+    :set-column-name
     (let [[id name] value]
       (assoc-in state [:table-editor :meta :columns id :name] name))
 
@@ -77,7 +77,7 @@
     (let [[id type] value]
       (assoc-in state [:table-editor :meta :columns id :type] type))
 
-    :add-column 
+    :add-column
     (let [new-column (init-column-data)]
       (-> state
           (assoc-in [:table-editor :meta :columns (:id new-column)] new-column)
@@ -103,6 +103,8 @@
         (update-in [:table-editor :fragment :data] #(conj % {}))
         (update-in [:table-editor :meta :count] inc)
         update-data-preview)
+
+    :init-closing (assoc-in state [:table-editor :closing] true)
 
     state))
 
@@ -190,24 +192,32 @@
   (emit [:set-updated (js/Date.now)] handler)
   (debounce-store-fragment))
 
-(defn close-editor []
+(defn close-modal []
+  (js/window.addEventListener
+    "animationend" 
+    #(if (= (.-animationName %) "slide-out") (emit [:close-editor nil]))
+    #js {:once true})
+  (emit [:init-closing nil] handler))
+
+
+(defn close-table-editor []
   (store-meta)
   (store-fragment)
-  (emit [:close-editor nil]))
+  (close-modal))
 
 (defn delete []
   (let [table (:meta @editor-cursor)
         delete-callback #(emit [:delete-table table])]
-    (emit [:close-editor nil])
     (delete-table {:table-id (:id table)
-                   :on-complete delete-callback})))
+                   :on-complete delete-callback})
+    (close-modal)))
 
 ;; -------------------------
 ;; View
 (defn editor-name []
-  [:div {:class "editor-section name-editor"}
+  [:div {:class "modal-section name-editor"}
    [:h3 "Name"]
-   [:div {:class "input-wr"}
+   [:div {:class "input-wrapper"}
     [:input
      {:type "text"
       :value (get-in @editor-cursor [:meta :name])
@@ -217,14 +227,14 @@
 
 (defn editor-column [column-id]
   [:div {:key column-id :class "column-editor"}
-   [:div {:class "input-wr"}
+   [:div {:class "input-wrapper"}
     [:input
      {:type "text"
       :value (get-in @editor-cursor [:meta :columns column-id :name])
       :auto-focus true
       :placeholder "New column name"
       :on-change #(emit-edit-meta [:set-column-name [column-id (.. % -target -value)]])}]]
-   [:div {:class "input-wr"}
+   [:div {:class "input-wrapper"}
     [:select
      {:value (get-in @editor-cursor [:meta :columns column-id :type])
       :on-change #(emit-edit-meta [:set-column-type [column-id (.. % -target -value)]])}
@@ -232,7 +242,7 @@
      [:option { :value :number } "Number"]]]])
 
 (defn editor-columns []
-  [:div {:class "editor-section column-set-editor"}
+  [:div {:class "modal-section column-set-editor"}
    [:h3 "Columns"]
    (doall (for [column-id (get-in @editor-cursor [:meta :sort-columns])]
             (editor-column column-id)))
@@ -240,40 +250,50 @@
              :on-click #(emit-edit-meta [:add-column nil])}
     "Add column"]])
 
-(defn cell-editor []
-  [:input
-   {:type "text"
-    :auto-focus true
-    :value (get-in @editor-cursor (concat [:fragment :data] (:active-cell @editor-cursor)))
-    :placeholder "New value"
-    :on-change #(emit-edit-fragment [:edit-cell (.. % -target -value)])
-    :on-blur #(emit [:unset-active-cell nil] handler)
-    :on-key-down (fn [e]
-                   (case (.-key e)
-                     "Enter" (do
+(defn cell-editor [column-type]
+  (let [value (get-in
+                @editor-cursor
+                (concat [:fragment :data] (:active-cell @editor-cursor)))
+        on-change (fn [event]
+                    (as-> (.. event -target -value) v
+                      (if (= :number (keyword column-type))
+                        (re-find #"[0-9]*\.?[0-9]*" v)
+                        v)
+                      (emit-edit-fragment [:edit-cell v])))]
+    [:input
+     {:type (if (= column-type :number) "number" "text")
+      :auto-focus true
+      :value value
+      :placeholder "New value"
+      :on-change on-change
+      :on-blur #(emit [:unset-active-cell nil] handler)
+      :on-key-down (fn [e]
+                     (case (.-key e)
+                       "Enter" (do
+                                 (.preventDefault e)
+                                 (emit [:move-active-cell :down] handler))
+                       "Tab" (do
                                (.preventDefault e)
-                               (emit [:move-active-cell :down] handler))
-                     "Tab" (do
-                             (.preventDefault e)
-                             (if (.-shiftKey e)
-                               (emit [:move-active-cell :prev] handler)
-                               (emit [:move-active-cell :next] handler)))
-                     nil))}])
+                               (if (.-shiftKey e)
+                                 (emit [:move-active-cell :prev] handler)
+                                 (emit [:move-active-cell :next] handler)))
+                       nil))}]))
 
 (defn editor-cell [cell-key data]
   (let [activate-cell #(emit [:set-active-cell cell-key] handler)]
     (cond
       (= cell-key (:active-cell @editor-cursor))
-        [:td {:key cell-key :class "active"} (cell-editor)]
+        [:td {:key cell-key :class "active"}
+         (cell-editor (get-in @editor-cursor [:meta :columns (second cell-key) :type]))]
       (blank? data)
         [:td {:key cell-key :class "blank" :on-click activate-cell} "Blank"]
       :else
         [:td {:key cell-key :on-click activate-cell} (str data)])))
 
 (defn editor-data []
-  [:div {:class "editor-section table-editor"}
+  [:div {:class "modal-section table-editor"}
    [:h3 "Data"]
-   [:div {:class "table-wr"}
+   [:div {:class "table-wrapper"}
     [:table
      [:tr
       (doall
@@ -287,23 +307,26 @@
          [:tr {:key row-index}
           (doall
             (for [column-id (get-in @editor-cursor [:meta :sort-columns])]
-              (editor-cell [row-index column-id] (get row-data column-id))))]))]]
-   [:button {:class "btn add-row-btn"
-             :on-click #(emit [:add-row nil] handler)}
-    "Add row"]])
+              (editor-cell [row-index column-id] (get row-data column-id))))]))]
+    [:button {:class "btn add-row-btn"
+              :on-click #(emit [:add-row nil] handler)}
+     "Add row"]]])
 
 (defn table-editor []
-  [:div {:class "modal"}
-   [:div {:class "modal-header"} "Table Editor"]
-   [:div {:class "modal-body"}
-    [:div {:class "table-editor"}
-     [editor-name]
-     [editor-columns]
-     [editor-data]]]
-   [:div {:class "modal-footer"}
+  [:div {:class (if (:closing @editor-cursor)
+                  "modal modal-editor modal-editor-closing"
+                  "modal modal-editor")}
+   [:div {:class "modal-header"}
+    [:div {:class "modal-title"} "Table Editor"]
+    [:div {:class "modal-menu btn-group"}
     [:button {:class "delete"
               :on-click delete}
      "Delete"]
     [:button {:class "close"
-              :on-click close-editor}
-     "Close"]]])
+              :on-click close-table-editor}
+     "Close"]]]
+   [:div {:class "modal-body"}
+    [:div {:class "table-editor"}
+     [editor-name]
+     [editor-columns]
+     [editor-data]]]])

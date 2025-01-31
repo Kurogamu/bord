@@ -31,7 +31,9 @@
 (defn stored->clj [data]
   (->> data
       js->clj
-      (map stored-entry->clj)))
+      (map stored-entry->clj)
+      (map #(vector (:id %) %))
+      (into {})))
 
 (defn clj->stored-entry [entry]
   (-> entry

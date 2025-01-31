@@ -1,11 +1,12 @@
 $font-stack: Helvetica, sans-serif;
 $primary-color: #fdfdfd;
 $faded-color: #a0a0a0;
-$background-color: #1a1a1a;
-$table-background-color: #101010;
+$background-color: #202020;
+$card-background-color: #0c0c0c;
+$table-background-color: #050505;
 $background-color-highlight: #151515;
-$modal-background-color: #151515;
-$modal-border-color-init: #c0c0c0;
+$modal-background-color: #101010;
+$modal-border-color-init: #a0a0a0;
 $modal-border-color: #404040;
 $border-color: #808080;
 $table-border-color: #404040;
@@ -14,87 +15,78 @@ $table-border: $table-border-color .1em solid;
 $table-header-border: $border-color .1em solid;
 $modal-border: $modal-border-color .25em solid;
 
-$button-background-color: #101010;
+$button-background-color: #050505;
 $button-background-hover: #303030;
 $button-background-flash: #909090;
+$input-background-color: #050505;
 
 body {
   font: 100% $font-stack;
   color: $primary-color;
   background-color: $background-color;
+
+  button, select {
+    border: .1em solid $border-color;
+    border-radius: .5em;
+    color: $primary-color;
+    transition: .2s linear;
+    background-color: $button-background-color;
+    padding: .25em 1em;
+    cursor: pointer;
+
+    &:hover {
+      transition: .2s linear;
+      background-color: $button-background-hover;
+    }
+  }
+}
+
+
+.main {
+  height: 100vh;
+  height: 100vw;
 }
 
 .modal {
   position: fixed;
   width: fit-content;
-  top: 23%;
+  top: 8vh;
   right: 0;
   left: 0;
   margin: auto;
-  max-width: 85%;
-  max-height: 62%;
+  max-width: 86vh;
+  max-height: 86vh;
   overflow: auto;
   background-color: $modal-background-color;
   border: $modal-border;
   border-radius: 0 .25em .25em .25em;
-
-  @keyframes onopen {
-    from {
-      border-color: $modal-border-color-init;
-    }
-    to {
-      border-color: $modal-border-color;
-    }
-  }
-  animation-name: onopen;
-  animation-duration: 0.5s;
-
-  > div {
-    padding: 1em 2em;
-  }
+  box-shadow: rgba(10,10,10,.8) 0px 20px 20px 30px;
 
   &-header {
+    padding: 1em;
+    position: sticky;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+
     font-weight: 800;
     font: 120% serif;
     border-bottom: $border-color .1em solid;
     text-overflow: ellipsis;
+    background-color: inherit;
+
+    > div {
+      flex: 0 1 auto;
+      &:not(:first-child) {
+        margin-left: 1em;
+      }
+    }
   }
 
   &-body {
     border-bottom: $border-color .1em solid;
+    padding: 1em 2em;
   }
-
-  &-footer {
-    display: flex;
-    flex-direction: row;
-    justify-content: end;
-    button:not(:last-child) {
-      margin-right: 1em;
-    }
-  }
-
-  button {
-    border: .1em solid $border-color;
-    border-radius: .5em;
-    color: $primary-color;
-    background-color: $button-background-color;
-    padding: .25em 1em;
-    cursor: pointer;
-    @keyframes onhover {
-      from {
-        background-color: $button-background-flash;
-      }
-      to {
-        background-color: $button-background-hover;
-      }
-    }
-    &:hover {
-      animation-name: onhover;
-      animation-duration: 0.5s;
-      background-color: $button-background-hover;
-    }
-  }
-
 
   h3 {
     padding: 0;
@@ -104,7 +96,7 @@ body {
     margin-bottom: 0.5em;
   }
 
-  .editor-section {
+  .modal-section {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -118,7 +110,14 @@ body {
     }
   }
 
-  .table-wr {
+  .table-wrapper {
+    margin-top: 1em;
+    background-color: $table-background-color;
+    padding: .5em;
+    border-radius: 1em;
+    display: flex;
+    flex-direction: column;
+
     .blank {
       color: $faded-color;
       font-style: italic;
@@ -150,6 +149,10 @@ body {
     th:not(:last-child), td:not(:last-child) {
       border-right: $table-border;
     }
+
+    > button {
+      margin: 1em auto;
+    }
   }
 }
 
@@ -162,7 +165,7 @@ body {
   padding-bottom: 1em;
 }
 
-.input-wr {
+.input-wrapper {
   display: grid;
   grid-row-gap: .5em;
   grid-column-gap: 1em;
@@ -181,7 +184,7 @@ body {
   input, textarea {
     border: none;
     color: $primary-color;
-    background-color: $table-background-color;
+    background-color: $input-background-color;
     padding: .5em;
   }
 }
@@ -201,8 +204,6 @@ body {
     }
   }
   .center-group {
-    position: absolute;
-    width: fit-content;
     right: 0;
     left: 0;
     margin: auto;
@@ -213,26 +214,16 @@ body {
   .right-group {
     flex: 0 0 auto;
   }
-  .btn {
-    cursor: pointer;
-    &:hover {
-      background-color: $background-color-highlight;
-    }
-  }
 }
 
 .card {
   border: $border-color .1em solid;
-  border-radius: 0 .25em .25em .25em;
+  border-radius: 0 1em 1em 1em;
   margin: 1em 2em;
   padding: 1em 2em;
-  background-color: $table-background-color;
+  background-color: $card-background-color;
   cursor: pointer;
-  flex: 0 1 auto;
-
-  &-function {
-    border-radius: 0 2em 2em 2em;
-  }
+  flex: 0 0 auto;
 
   &-header {
     font-weight: 600;
@@ -245,11 +236,17 @@ body {
   &-subheader {
     font-size: 85%;
     font-style: italic;
+    text-align: right;
   }
 
   &-content {
     margin-top: 1em;
+    background-color: $table-background-color;
+    padding: .5em;
+    border-radius: 1em;
+
     table {
+      margin: 0 auto;
       table-layout: fixed;
       border-collapse: collapse;
     }
@@ -276,30 +273,65 @@ body {
     }
   }
 
-  @keyframes onhover {
-    from {
-      background-color: $table-background-color;
-    }
-    to {
-      background-color: $background-color-highlight;
-    }
-  }
-
   &:hover {
-    animation-name: onhover;
-    animation-duration: 0.5s;
     background-color: $background-color-highlight;
+    box-shadow: rgba(10,10,10,.8)  0px 5px 5px 5px;
   }
 
-  &-container {
-    display: flex;
-    flex-flow: wrap;
-    justify-content: space-evenly;
+  transition: background-color .3s;
+}
+
+.card-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+  align-items: baseline;
+}
+
+.modal-editor {
+  animation: slide-in .5s ease-out;
+
+  &-closing {
+    animation: slide-out .5s ease-in;
+  }
+
+  @keyframes slide-in {
+    from {
+      transform: translateY(-150%);
+    }
+  }
+
+  @keyframes slide-out {
+    to {
+      transform: translateY(-150%);
+    }
   }
 }
 
-.input-modal {
-  &-inactive {
-    display: none;
-  } 
+.modal-select {
+  animation: pop-in .3s ease-out;
+
+  &-closing {
+    animation: pop-out .2s linear;
+  }
+
+  @keyframes pop-in {
+    from {
+      transform: scale(120%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes pop-out {
+    to {
+      transform: scale(80%);
+      opacity: 0;
+    }
+  }
+}
+
+.btn-group {
+  > button:not(:first-child) {
+    margin-left: .5em;
+  }
 }

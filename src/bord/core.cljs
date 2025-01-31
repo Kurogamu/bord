@@ -1,6 +1,6 @@
 (ns bord.core
   (:require
-    [bord.state :refer [app-state emit]]
+    [bord.state :refer [app-state emit function-outputs]]
     [bord.table-editor :refer [load-table-editor table-editor]]
     [bord.function-editor :refer [load-function-editor function-editor]]
     [cljs.core.async :refer [go go-loop chan put!]]
@@ -31,7 +31,7 @@
 
 (defn topmenu [state]
   [:div {:class "top-menu"}
-   [:div {:class "left-group"}
+   [:div {:class "left-group btn-group"}
     [:button {:class "btn add-table-btn"
               :on-click #(load-table-editor :new)}
      "Add table"]
@@ -40,7 +40,8 @@
      "Add function"]]
    [:div {:class "center-group"}
     [:div {:class "title"} "[Bord]"]]
-   [:div {:class "right-group"}]])
+   [:div {:class "right-group"}
+    "wat"]])
 
 (defn render-cell [{:keys [data]}]
   (if (some? data)
@@ -62,7 +63,7 @@
 
 (defn data-table [data]
   [:div {:class "card-container table-container"}
-   (for [entry data]
+   (for [entry (vals data)]
      [:div {:key (:id entry)
             :class "card card-table"
             :on-click #(load-table-editor entry)}
@@ -72,16 +73,29 @@
        (.toLocaleString (js/Date. (:updated entry)))]
       (render-table-data entry)])])
 
-(defn functions [entries]
+(defn render-function-preview [function]
+  [:div {:class "card-content table"}
+   [:table
+    [:tr
+     (for [output (function-outputs function)]
+       [:th {:key (:id output)} (:name output)])]
+    (if (seq (:preview function))
+      (for [[index result-row] (map-indexed vector (:preview function))]
+        [:tr {:key index}
+         (for [[id value] result-row]
+           [:td {:key id} (or (str value) "Blank")])]))]])
+
+(defn functions [data]
   [:div {:class "card-container functions-container"}
-   (for [entry entries]
-     [:div {:key (:id entry)
-            :class "card card-function"
-            :on-click #(load-function-editor entry)}
-      [:div {:class "card-header"}
-       (:name entry)]
-      [:div {:class "card-subheader"}
-       (.toLocaleString (js/Date. (:updated entry)))]])])
+   (doall (for [entry (vals data)]
+            [:div {:key (:id entry)
+                   :class "card card-function"
+                   :on-click #(load-function-editor entry)}
+             [:div {:class "card-header"}
+              (:name entry)]
+             [:div {:class "card-subheader"}
+              (.toLocaleString (js/Date. (:updated entry)))]
+      (render-function-preview entry)]))])
 
 (defn main [state]
   [:div {:class "main"}
@@ -114,8 +128,12 @@
     (let [pressed-key (<! keydown-ch)]
       (if (not= last-pressed pressed-key)
         (case pressed-key
-          "t" (if (and (nil? (:table-editor @app-state)) (nil? (:function-editor @app-state)))
+          "t" (if (and (nil? (:table-editor @app-state))
+                       (nil? (:function-editor @app-state)))
                 (load-table-editor :new))
+          "f" (if (and (nil? (:table-editor @app-state))
+                       (nil? (:function-editor @app-state)))
+                (load-function-editor :new))
           "Escape" (emit [:close-editor nil])
           nil))
       (recur pressed-key))))
