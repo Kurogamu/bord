@@ -4,62 +4,68 @@
 
 (def const-operations
   {:number-constant {:label "Numeric Constant"
-                     :type :input-number
+                     :param-type :input-number
                      :result-type :number}
    :string-constant {:label "Text Constant"
-                   :type :input-string
+                   :param-type :input-string
                    :result-type :string}})
 
 (def map-operations
   {:sum {:label "Sum"
-         :type :source-number
+         :param-type :source-number
          :result-type :number}
    :subtract {:label "Subtract"
-              :type :source-number
+              :param-type :source-number
               :result-type :number}
    :product {:label "Product"
-             :type :source-number
+             :param-type :source-number
              :result-type :number}
    :divide {:label "Divide"
-             :type :source-number
+             :param-type :source-number
              :result-type :number}
    :format {:label "Format"
-            :type :source-string
+            :param-type :source-string
             :result-type :string}})
 
 (def filter-operations
   {:equals {:label "Equals"
-            :type :source-string
+            :param-type :source-string
             :result-type :boolean}
    :not-equals {:label "Not equal"
-                :type :source-string
+                :param-type :source-string
                 :result-type :boolean}
    :contains {:label "Contains"
-              :type :source-string
+              :param-type :source-string
               :result-type :boolean}
    :not-contains {:label "Not containing"
-                  :type :source-string
+                  :param-type :source-string
                   :result-type :boolean}
    :or {:label "Or"
-        :type :boolean
+        :param-type :boolean
         :result-type :boolean}
    :and {:label "And"
-         :type :boolean
+         :param-type :boolean
          :result-type :boolean}})
 
 (def reduce-operations
   {:sum {:label "Sum"
-         :type :source-number
+         :param-type :source-number
          :result-type :number}
    :negative {:label "Negative"
-              :type :negative
+              :param-type :negative
               :result-type :number}
    :concat {:label "Concat"
-            :type :source-string
+            :param-type :source-string
             :result-type :string}})
 
 (def all-operations
   (merge const-operations map-operations filter-operations reduce-operations))
+
+(defn param-type [operation]
+  (get-in all-operations [operation :param-type]))
+
+(defn result-type [operation]
+  (get-in all-operations [operation :result-type]))
 
 (def function-types
   {"map" {:label "Map"
