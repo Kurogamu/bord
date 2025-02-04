@@ -4,8 +4,13 @@
     [clojure.string :refer [blank?]]
     [bord.state :refer [app-state emit]]
     [bord.data :refer [fetch-fragment put-meta put-fragment delete-table]]
+    [bord.common :refer [find-first-i]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
+
+
+;; Delay after last interaction before saving
+(def debounce-timeout 2000)
 
 ;; -------------------------
 ;; Model
@@ -42,17 +47,21 @@
 (defn calculate-move-cell [state direction]
   (let [[row column-id] (get-in state [:table-editor :active-cell])
         sort-columns (get-in state [:table-editor :meta :sort-columns])
-        column-index (.indexOf sort-columns column-id)
+        column-index (find-first-i sort-columns column-id)
 
         last-row
-        (-> (get-in state [:table-editor :fragment :data]) count dec)
+        (-> (get-in state [:table-editor :fragment :data])
+            count
+            dec)
 
         last-column
-        (-> (get-in state [:table-editor :meta :columns]) count dec)]
+        (-> (get-in state [:table-editor :meta :columns])
+            count
+            dec)]
     (case direction
       :down (if (< row last-row)
-                [(inc row) column-id]
-                [row column-id])
+              [(inc row) column-id]
+              [row column-id])
       :prev (if (> column-index 0)
               [row (nth sort-columns (dec column-index))]
               [(dec row) (last sort-columns)])
@@ -69,10 +78,11 @@
     (assoc-in state [:table-editor :meta :data-preview] preview-rows)))
 
 (defn handler [state [event value]]
-  (let [meta-path (fn [& args] (concat [:table-editor :function] args))]
+  (let [meta-path (fn [& args] (concat [:table-editor :meta] args))]
     (case event
       :set-updated (assoc-in state (meta-path :updated) value)
       :set-table-name (assoc-in state (meta-path :name) value)
+
       :set-column-name
       (let [[id name] value]
         (assoc-in state (meta-path :columns id :name) name))
@@ -95,23 +105,21 @@
             (assoc-in cell-path value)
             update-data-preview))
 
+      :set-active-cell (assoc-in state [:table-editor :active-cell] value)
       :unset-active-cell (assoc-in state [:table-editor :active-cell] nil)
 
       :move-active-cell
       (assoc-in state
                 [:table-editor :active-cell]
                 (calculate-move-cell state value))
-
-      :set-active-cell (assoc-in state [:table-editor :active-cell] value)
       :set-fragment (assoc-in state [:table-editor :fragment] value)
+
       :add-row
       (-> state
           (update-in [:table-editor :fragment :data] conj {})
           (update-in (meta-path :count) inc)
           update-data-preview)
-
       :init-closing (assoc-in state [:table-editor :closing] true)
-
       state)))
 
 ;; -------------------------
@@ -165,7 +173,7 @@
 (defn debounce-store-meta []
   (go
     (swap! store-meta-queue inc)
-    (<! (timeout 2000))
+    (<! (timeout debounce-timeout))
     (if (> @store-meta-queue 1)
       (swap! store-meta-queue dec)
       (store-meta))))
@@ -188,10 +196,11 @@
 (defn debounce-store-fragment []
   (go
     (swap! store-fragment-queue inc)
-    (<! (timeout 2000))
-    (if (> @store-fragment-queue 1)
-      (swap! store-fragment-queue dec)
-      (store-fragment))))
+    (<! (timeout debounce-timeout))
+    (case @store-fragment-queue
+      0 nil ; Queue was shortcut
+      1 (store-fragment)
+      (swap! store-fragment-queue dec))))
 
 (defn emit-edit-fragment [msg]
   (emit msg handler)
@@ -221,9 +230,11 @@
 ;; -------------------------
 ;; View
 (defn editor-name []
-  [:div {:class "modal-section name-editor"}
+  [:div
+   {:class "modal-section name-editor"}
    [:h3 "Name"]
-   [:div {:class "input-wrapper"}
+   [:div
+    {:class "input-wrapper"}
     [:input
      {:type "text"
       :value (get-in @editor-cursor [:meta :name])
@@ -232,8 +243,10 @@
       :on-change #(emit-edit-meta [:set-table-name (.. % -target -value)])}]]])
 
 (defn editor-column [column-id]
-  [:div {:key column-id :class "column-editor"}
-   [:div {:class "input-wrapper"}
+  [:div
+   {:key column-id :class "column-editor"}
+   [:div
+    {:class "input-wrapper"}
     [:input
      {:type "text"
       :value (get-in @editor-cursor [:meta :columns column-id :name])
@@ -241,7 +254,8 @@
       :placeholder "New column name"
       :on-change #(emit-edit-meta
                     [:set-column-name [column-id (.. % -target -value)]])}]]
-   [:div {:class "input-wrapper"}
+   [:div
+    {:class "input-wrapper"}
     [:select
      {:value (get-in @editor-cursor [:meta :columns column-id :type])
       :on-change #(emit-edit-meta
@@ -255,8 +269,9 @@
    (doall (for [column-id
                 (get-in @editor-cursor [:meta :sort-columns])]
             (editor-column column-id)))
-   [:button {:class "btn add-column-btn"
-             :on-click #(emit-edit-meta [:add-column nil])}
+   [:button
+    {:class "btn add-column-btn"
+     :on-click #(emit-edit-meta [:add-column nil])}
     "Add column"]])
 
 (defn cell-editor [column-type]

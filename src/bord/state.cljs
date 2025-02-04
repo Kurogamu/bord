@@ -32,7 +32,7 @@
 
 (defn emit
   ([msg] (r/rswap! app-state shared-handler msg))
-  ([msg handler] (js/console.log (clj->js @app-state)) (r/rswap! app-state handler msg)))
+  ([msg handler] (r/rswap! app-state handler msg)))
 
 ;; ----------------
 ;; Helpers

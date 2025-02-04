@@ -68,11 +68,11 @@
   (get-in all-operations [operation :result-type]))
 
 (def function-types
-  {"map" {:label "Map"
+  {:map {:label "Map"
           :operations (merge map-operations const-operations)}
-   "filter" {:label "Filter"
+   :filter {:label "Filter"
              :operations (merge filter-operations const-operations)}
-   "reduce" {:label "Reduce"
+   :reduce {:label "Reduce"
              :operations (merge reduce-operations const-operations)}})
 
 (defn run-operation [data operation]
