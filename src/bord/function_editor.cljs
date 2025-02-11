@@ -3,9 +3,11 @@
     [reagent.core :as r]
     [clojure.string :refer [blank?]]
     [bord.state :refer [app-state emit function-outputs]]
-    [bord.common :refer [find-first-i remove-match swap-entry]]
+    [bord.common :refer [find-first-i remove-i move-i remove-match swap-i]]
     [bord.data :refer [put-function delete-function]]
-    [bord.function :refer [function-types param-type result-type process-row]]
+    [bord.function :refer [all-operations
+                           function-types
+                           param-type result-type process-row]]
     [bord.select-modal :refer [multiselect]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
@@ -68,14 +70,15 @@
       :add-operation
       (-> state
           (assoc-in (data-path :operations (:id value)) value)
-          (update-in (data-path :sort-operations) conj (:id value)))
+          (update-in (data-path :sort-operations) conj (:id value))
+          (assoc-in [:function-editor :active-operation] (:id value)))
 
       :move-back-operation
       (let [index
             (find-first-i (get-in state (data-path :sort-operations)) value)]
         (update-in state
                    (data-path :sort-operations)
-                   swap-entry index (inc index)))
+                   swap-i index (inc index)))
 
       :move-forward-operation
       (let [index (find-first-i
@@ -83,7 +86,7 @@
                     value)]
         (update-in state
                    (data-path :sort-operations)
-                   swap-entry index (dec index)))
+                   swap-i index (dec index)))
 
       :delete-operation
       (-> state
@@ -105,6 +108,22 @@
       :set-outputs (assoc-in state (data-path :outputs) value)
       :set-preview (assoc-in state (data-path :preview) value)
       :init-closing (assoc-in state [:function-editor :closing] true)
+
+      :set-active-operation (assoc-in state [:function-editor :active-operation] value)
+      :set-reorder-operations (assoc-in state [:function-editor :reorder-operations] value)
+      :set-moving-operation (assoc-in state [:function-editor :moving-operation] value)
+      :set-dragover-operation (assoc-in state [:function-editor :dragover-operation] value)
+      :set-moving-operation-destination
+      (let [source (find-first-i 
+                     (get-in state (data-path :sort-operations))
+                     (get-in state [:function-editor :moving-operation]))
+            target (find-first-i 
+                     (get-in state (data-path :sort-operations))
+                     value)]
+        (-> state
+            (assoc-in [:function-editor :dragover-operation] nil)
+            (assoc-in [:function-editor :moving-operation] nil)
+            (update-in (data-path :sort-operations) move-i source target)))
 
       state)))
 
@@ -219,97 +238,194 @@
         {:key function-key :value function-key}
         (:label function-type)])]]])
 
-(defn editor-parameters [{:keys [id operand params]}]
-  (let [param-operations
+(defn editor-parameters-select [{:keys [id value value-type]}]
+  (let [preceding-operations
         (->>
           (find-first-i (:sort-operations @editor-cursor) id)
           (subvec (:sort-operations @editor-cursor) 0)
-          (map #(vector % (get-in @editor-cursor [:operations %])))
-          (into {}))]
-    (case (param-type (keyword operand))
-      :source-number
-      (let [num-operations
-            (->> param-operations
-                 (filter #(= :number (result-type (:operand (second %)))))
-                 (into {}))]
-        [multiselect
-         {:on-change #(emit-edit [:set-params [id %]])
-          :value params
-          :options (merge (source-number-columns @app-state) num-operations)
-          :labelfn :name
-          :ordered true
-          :header "Operator parameters"}])
+          (map #(vector % (get-in @editor-cursor [:operations %]))))
 
-      :source-string
-      [multiselect
-       {:on-change #(emit-edit [:set-params [id %]])
-        :value params
-        :options (merge (source-columns @app-state) param-operations)
-        :labelfn :name
-        :ordered true
-        :header "Operator parameters"}]
+        selectable-operations
+        (if (= value-type :source-number)
+          (->> preceding-operations
+               (filter #(= :number (-> % second :operand keyword result-type)))
+               (into {}))
+          (into {} preceding-operations))
 
-      :input-number
-      [:div {:class "input-wrapper"}
-       [:input
-        {:type "number"
-         :value params
-         :on-change #(emit-edit [:set-params [id (.. % -target -value)]])}]]
+        selectable-columns
+        (if (= value-type :source-number)
+          (source-number-columns @app-state)
+          (source-columns @app-state))
 
-      :input-string
-      [:div {:class "input-wrapper"}
-       [:input
-        {:type "text"
-         :value params
-         :on-change #(emit-edit [:set-params [id (.. % -target -value)]])}]]
+        selectable (merge selectable-operations selectable-columns)]
+    [:<>
+     [:div {:class "field-label"} "Parameters"]
+     [:div {:class "field-wrapper"}
+      [:div {:class "button-select-wrapper"}
+       (if (some? selectable)
+         [:div
+          {:class "select-group-wrapper"}
+          [:div
+           {:class "btn-group select-group"}
+           (for [[option-key option] selectable]
+             [:button
+              {:class "btn btn-select"
+               :key option-key
+               :on-click #(emit-edit [:set-params [id (conj value option-key)]])}
+              (:name option)])]
+          [:div {:class "label"} "Available"]]
+         [:div {:class "blank"} "No parameters available"])
+       (if (some? value)
+         [:div
+          {:class "select-group-wrapper"}
+          [:div
+           {:class "btn-group select-group"}
+           (for [[index param-key] (map-indexed vector value)]
+             [:button
+              {:class "btn btn-select"
+               :key index
+               :on-click #(emit-edit [:set-params [id (remove-i value index)]])}
+              (:name (get selectable param-key))])]
+          [:div {:class "label"} "Selected"]]
+         [:div {:class "blank"} "No parameters selected"])]]]))
 
-      [:div])))
+(defn editor-parameters-value [{:keys [id value value-type]}]
+  (let [input-type (if (= param-type :input-number) "number" "text")]
+    [:<>
+     [:div {:class "input-label"} "Value"]
+     [:input
+      {:class "input"
+       :type input-type
+       :value value
+       :on-change #(emit-edit [:set-params [id (.. % -target -value)]])}]]))
 
-(defn editor-operator [id]
-  (let [operation (get-in @editor-cursor [:operations id])]
-    [:tr {:key id}
-     [:td
-      [:select
-       {:value (:operand operation)
-        :on-change #(emit-edit [:set-operand [id (.. % -target -value)]])}
-       (for [[op-key op] (get-in function-types
-                                 [(:type @editor-cursor) :operations])]
-         [:option
-          {:key op-key :value op-key}
-          (:label op)])]]
-     [:td (editor-parameters operation)]
-     [:td
-      {:class "input-wrapper"}
-      [:input
-       {:type "text"
-        :value (:name operation)
-        :placeholder "Name"
-        :on-change #(emit-edit [:set-label [id (.. % -target -value)]])}]]
-     [:td {:class "btn-group"}
-      [:button
-       {:class "btn move-btn"
-        :on-click #(emit-edit [:move-back-operation id])}
-       "Down"]
-      [:button
-       {:class "btn move-btn"
-        :on-click #(emit-edit [:move-forward-operation id])}
-       "Up"]
-      [:button
-       {:class "btn delete-btn"
-        :on-click #(emit-edit [:delete-operation id])}
-       "X"]]]))
+(defn editor-parameters [{:keys [id operand params]}]
+  (let [value-type (param-type (keyword operand))
+        props {:id id :value-type value-type :value params}]
+    (case value-type
+      :source-number [editor-parameters-select props]
+      :source-string [editor-parameters-select props]
+      [editor-parameters-value props])))
+
+(defn editor-operation-edit [operation]
+  [:div
+   {:key (:id operation)
+    :class "operation operation-edit grid-editor"}
+   [:div {:class "input-label"} "Name"]
+   [:input
+    {:class "input-wrapper"
+     :type "text"
+     :value (:name operation)
+     :placeholder "Name"
+     :on-change
+     #(emit-edit [:set-label [(:id operation) (.. % -target -value)]])}]
+   [:div {:class "input-label"} "Function"]
+   [:select
+    {:class "input-wrapper"
+     :value (:operand operation)
+     :on-change
+     #(emit-edit [:set-operand [(:id operation) (.. % -target -value)]])}
+    (for [[op-key op] (get-in function-types [(keyword (:type @editor-cursor)) :operations])]
+      [:option {:key op-key :value op-key} (:label op)])]
+  (editor-parameters operation)
+  [:div
+   {:class "button-wrapper"}
+   [:button
+    {:class "btn"
+     :on-click #(emit [:set-active-operation nil] handler)}
+    "Done"]]])
+
+(defn editor-operation-view [operation]
+  (let [operand (get all-operations (keyword (:operand operation)))]
+    [:div
+     {:key (:id operation)
+      :class "operation operation-view"
+      :on-click #(emit [:set-active-operation (:id operation)] handler)}
+     [:div
+      {:class "operation-view-header"}
+      [:div {:class "operation-view-name"} (:name operation)]
+      [:div {:class "operation-view-operand"} (:label operand)]]
+     [:div
+      {:class "operation-view-params"}
+      (case (:param-type operand)
+        :input-number [:div {:class "number"} (:params operation)]
+        :input-string [:div {:class "string"} (:params operation)]
+        (let [sources (merge (source-columns @app-state)
+                             (:operations @editor-cursor))
+              param-labels (map #(-> (get sources %) :name) (:params operation))]
+          [:div
+           {:class "list"}
+           (map-indexed (fn [i l] [:span {:key i} l]) param-labels)]))]]))
+
+(defn editor-operation [id]
+  (let [operation (get-in @editor-cursor [:operations id])
+        active (= (get-in @app-state [:function-editor :active-operation]) id)]
+    (if active
+      (editor-operation-edit operation)
+      (editor-operation-view operation))))
+
+(defn editor-operation-movable [operation]
+  (let [moving-operation (get-in @app-state [:function-editor :moving-operation])
+        dragover-operation (get-in @app-state [:function-editor :dragover-operation])
+        class-name (condp = (:id operation)
+                     moving-operation
+                     "operation-movable operation-movable-moving"
+                     dragover-operation
+                     "operation-movable operation-movable-dragover"
+                     "operation-movable")
+        on-drag (fn [e]
+                  (.preventDefault e)
+                  (if (not= moving-operation (:id operation))
+                    (emit [:set-moving-operation (:id operation)] handler)))
+        on-drag-over (fn [e]
+                      (.preventDefault e)
+                      (if (not= dragover-operation (:id operation))
+                        (emit [:set-dragover-operation (:id operation)] handler)))]
+    [:div
+     {:key (:id operation)
+      :class class-name
+      :draggable true
+      :droppable true
+      :on-drag on-drag
+      :on-drag-end #(emit [:set-moving-operation nil] handler)
+      :on-drag-over on-drag-over
+      :on-drag-leave #(emit [:set-dragover-operation nil] handler)
+      :on-drop (fn [e] (emit-edit [:set-moving-operation-destination (:id operation)]))}
+     [:span (:name operation)]]))
+
+(defn editor-operations-reorder []
+  (let [operations (map
+                     #(get-in @editor-cursor [:operations %])
+                     (:sort-operations @editor-cursor))]
+    [:<>
+    [:div
+     {:class "movable-operation-wrapper"}
+     (doall
+       (for [operation operations]
+         (editor-operation-movable operation)))]
+    [:div {:class "btn-group"}
+     [:button
+      {:class "btn reorder-btn"
+       :on-click #(emit [:set-reorder-operations false] handler)}
+      "Done"]]]))
 
 (defn editor-operations []
   [:div
    {:class "modal-section output-operations"}
    [:h3 "Operations"]
-   [:table
-    [:tr [:th "Operand"] [:th "Parameters"] [:th "Label"]]
-    (doall (map editor-operator (:sort-operations @editor-cursor)))]
-   [:button
-    {:class "btn add-operation-btn"
-     :on-click #(emit-edit [:add-operation (init-operation @app-state)])}
-    "Add operation"]])
+   (if (get-in @app-state [:function-editor :reorder-operations])
+     [editor-operations-reorder]
+     [:<>
+      (doall (map editor-operation (:sort-operations @editor-cursor)))
+      [:div {:class "btn-group"}
+       [:button
+        {:class "btn add-operation-btn"
+         :on-click #(emit-edit [:add-operation (init-operation @app-state)])}
+        "Add"]
+       [:button
+        {:class "btn reorder-btn"
+         :on-click #(emit [:set-reorder-operations true] handler)}
+        "Reorder"]]])])
 
 (defn editor-output []
   (let [options (merge

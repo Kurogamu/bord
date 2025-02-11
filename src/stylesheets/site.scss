@@ -1,11 +1,12 @@
 $font-stack: Helvetica, sans-serif;
 $primary-color: #fdfdfd;
-$faded-color: #a0a0a0;
+$faded-color: #b0b0b0;
 $background-color: #202020;
 $card-background-color: #0c0c0c;
 $table-background-color: #050505;
 $background-color-highlight: #151515;
 $modal-background-color: #101010;
+$modal-background: radial-gradient($modal-background-color, $background-color-highlight);
 $modal-border-color-init: #a0a0a0;
 $modal-border-color: #404040;
 $border-color: #808080;
@@ -14,9 +15,11 @@ $table-border-color: #404040;
 $table-border: $table-border-color .1em solid;
 $table-header-border: $border-color .1em solid;
 $modal-border: $modal-border-color .25em solid;
+$header-border: $border-color .1em solid;
+$button-border: $border-color .1em solid;
 
 $button-background-color: #050505;
-$button-background-hover: #303030;
+$button-background-hover: #202020;
 $button-background-flash: #909090;
 $input-background-color: #050505;
 
@@ -26,7 +29,7 @@ body {
   background-color: $background-color;
 
   button, select {
-    border: .1em solid $border-color;
+    border: $button-border;
     border-radius: .5em;
     color: $primary-color;
     transition: .2s linear;
@@ -49,12 +52,11 @@ body {
 
 .modal {
   position: fixed;
-  width: fit-content;
   top: 8vh;
   right: 0;
   left: 0;
   margin: auto;
-  max-width: 86vh;
+  width: clamp(24rem,32rem,86vw);
   max-height: 86vh;
   overflow: auto;
   background-color: $modal-background-color;
@@ -86,17 +88,18 @@ body {
   &-body {
     border-bottom: $border-color .1em solid;
     padding: 1em 2em;
+    background: $modal-background;
   }
 
   h3 {
     padding: 0;
     margin: 0;
     padding-bottom: 0.5em;
-    border-bottom: $table-border;
+    border-bottom: $header-border;
     margin-bottom: 0.5em;
   }
 
-  .modal-section {
+  &-section {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -154,6 +157,129 @@ body {
       margin: 1em auto;
     }
   }
+
+  .operation {
+    &:not(:last-child) {
+      margin-bottom: .5em;
+    }
+  }
+
+  .operation-view {
+    cursor: pointer;
+    border: .1em solid $border-color;
+    border-radius: 1em;
+
+    background-color: $card-background-color;
+
+    &:hover {
+      background-color: $button-background-hover;
+    }
+
+    &-header {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      border-bottom: $header-border;
+      padding: .5em 1em 0.25em 1em;
+    }
+
+    &-name {
+      font-weight: 600;
+    }
+
+    &-operand {
+      font-size: 85%;
+      font-style: italic;
+      color: $faded-color;
+    }
+
+    &-params {
+      padding: .25em 1em 1em 1em;
+      text-align: center;
+
+      .number {
+        font-weight: 600;
+      }
+
+      .list {
+        &::before {
+          content: "[";
+          font-size: 120%;
+        }
+        &::after {
+          content: "]";
+          font-size: 120%;
+        }
+        > span {
+          font-style: italic;
+          margin: 0 .5em;
+          &:not(:first-child) {
+            margin-left: 0;
+          }
+        }
+      }
+    }
+
+    transition: background-color .3s;
+  }
+
+  .operation-movable {
+    border: $button-border;
+    background-color: $card-background-color;
+    padding: .5em 1em;
+    cursor: grab;
+    font-weight: 600;
+
+    transition: all .2s ease-out;
+
+    &::before {
+      content: "Move here";
+      font-style: italic;
+      font-weight: 400;
+      position: absolute;
+      transform: translateY(-50%) scaleY(0);
+      transition: all .2s ease-out;
+    }
+
+    span {
+      display: inline-block;
+      transition: all .2s ease-out;
+    }
+
+    &:first-child {
+      border-radius: .5em .5em 0 0;
+    }
+
+    &:last-child {
+      border-radius: 0 0 .5em .5em;
+    }
+
+    &:hover {
+      background-color: $button-background-hover;
+    }
+
+    &:active {
+      background-color: $button-background-hover;
+    }
+
+    &-moving {
+      span {
+        opacity: .5;
+      }
+    }
+
+    &-dragover {
+      &::before {
+        transform: translateY(0) scaleY(1);
+      }
+
+      span {
+        transform: translateY(50%) scaleY(0);
+      }
+    }
+
+  }
 }
 
 .column-editor {
@@ -165,27 +291,98 @@ body {
   padding-bottom: 1em;
 }
 
-.input-wrapper {
+.button-select-wrapper {
+  display: flex;
+  flex-direction: column;
+  background-color: $button-background-color;
+  border-radius: .5em;
+  padding: .5em 1em;
+
+  .select-group-wrapper {
+    display: flex;
+    flex-direction: row;
+  }
+
+  > div:not(:first-child) {
+    margin-top: .5em;
+    border-top: $button-border;
+    padding-top: .5em;
+  }
+
+  .btn-group {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-self: baseline;
+  }
+
+  .btn-select {
+    margin: 0.25em 0;
+  }
+
+  .label {
+    flex: 0 0 auto;
+    justify-self: end;
+    color: $faded-color;
+    font-size: 85%;
+    font-style: italic;
+    align-self: baseline;
+    margin-left: 1em;
+  }
+  
+  .blank {
+    flex-grow: auto;
+    justify-self: center;
+  }
+}
+
+.grid-editor {
   display: grid;
   grid-row-gap: .5em;
   grid-column-gap: 1em;
+  grid-template-columns: min-content auto;
+  padding: 1em 2em;
+  border: $button-border;
+  border-radius: 1em;
+  background-color: $card-background-color;
+  align-items: baseline;
+
   .input-label {
+    justify-self: end;
+  }
+
+  .field-label {
+    justify-self: start;
+  }
+
+  .input-label, .field-label {
     grid-column-start: 1;
-    justify-self: end;
+    font-size: 85%;
+    font-weight: 600;
+    color: $faded-color;
   }
-  .input-element {
+
+  .input {
     grid-column-start: 2;
+    align-self: baseline;
   }
-  .btn-group {
+
+  .field-wrapper {
     grid-column: span 2;
-    justify-self: end;
+    justify-self: stretch;
+  }
+
+  .button-wrapper {
+    grid-column: span 2;
+    justify-self: center;
   }
 
   input, textarea {
     border: none;
+    border-radius: .5em;
     color: $primary-color;
     background-color: $input-background-color;
     padding: .5em;
+    width: auto;
   }
 }
 
@@ -226,8 +423,9 @@ body {
   flex: 0 0 auto;
 
   &-header {
-    font-weight: 600;
     font: 120% serif;
+    font-weight: 600;
+    font-variant: small-caps;
     border-bottom: $border-color .1em solid;
     padding-bottom: .25em;
     text-overflow: ellipsis;
@@ -237,6 +435,7 @@ body {
     font-size: 85%;
     font-style: italic;
     text-align: right;
+    color: $faded-color;
   }
 
   &-content {

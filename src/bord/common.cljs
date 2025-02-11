@@ -16,7 +16,27 @@
 (defn remove-match [values value]
   (vec (remove #(= value %) values)))
 
-(defn swap-entry [values a-index b-index]
+(defn remove-i [values index]
+  (vec
+    (concat
+      (subvec values 0 index)
+      (subvec values (inc index)))))
+
+(defn add-i [values value index]
+  (vec
+    (concat
+      (subvec values 0 index)
+      [value]
+      (subvec values index))))
+
+(defn move-i [values source-index target-index]
+  (if (= source-index target-index)
+    values
+    (-> values
+        (remove-i source-index)
+        (add-i (get values source-index) target-index))))
+
+(defn swap-i [values a-index b-index]
   (if (every? values [a-index b-index])
     (let [a-value (nth values a-index)
           b-value (nth values b-index)]
