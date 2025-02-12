@@ -69,11 +69,14 @@
 
 (def function-types
   {:map {:label "Map"
-          :operations (merge map-operations const-operations)}
+         :description "Apply to each row"
+         :operations (merge map-operations const-operations)}
    :filter {:label "Filter"
-             :operations (merge filter-operations const-operations)}
+            :description "Select some rows"
+            :operations (merge filter-operations const-operations)}
    :reduce {:label "Reduce"
-             :operations (merge reduce-operations const-operations)}})
+            :description "Squash all rows into one"
+            :operations (merge reduce-operations const-operations)}})
 
 (defn run-operation [data operation]
   (let [values (map #(get data %) (:params operation))]

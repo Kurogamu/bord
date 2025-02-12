@@ -44,3 +44,9 @@
           (assoc a-index b-value)
           (assoc b-index a-value)))
     values))
+
+(defn animation-trigger [animation-name function & args]
+  (js/window.addEventListener
+    "animationend"
+    #(if (= (.-animationName %) animation-name) (apply function args))
+    #js {:once true}))
