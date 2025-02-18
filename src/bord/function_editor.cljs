@@ -30,12 +30,11 @@
   (let [source-id (get-in state [:function-editor :function :source])]
     (get-in state [:tables source-id :data-preview])))
 
-(defn init-function-data [state]
+(defn init-function-data []
   {:id (js/crypto.randomUUID)
    :name ""
    :created (js/Date.now)
    :updated (js/Date.now)
-   :source (-> state :tables first first)
    :outputs []
    :type :map
    :sort-operations []
@@ -131,8 +130,8 @@
 ;; -------------------------
 ;; Task
 
-(defn setup-new-function []
-  (let [new-function (init-function-data @app-state)
+(defn setup-new-function [source]
+  (let [new-function (merge (init-function-data) source)
         success-callback #(emit [:set-editor-function new-function])
         error-callback #(js/console.error "Failed to create function" %)]
     (put-function
@@ -141,9 +140,9 @@
        :on-error error-callback})))
 
 (defn load-function-editor [function]
-  (if (= function :new)
-    (setup-new-function)
-    (emit [:set-editor-function function])))
+  (if (contains? function :id)
+    (emit [:set-editor-function function])
+    (setup-new-function function)))
 
 (def store-function-queue (r/atom 0))
 
@@ -203,38 +202,26 @@
    [:h3 "Name"]
    [:div
     {:class "input-wrapper"}
-    [:input {:type "text"
-             :value (:name @editor-cursor)
-             :auto-focus true
-             :placeholder "New function name"
-             :on-change #(emit-edit [:set-name (.. % -target -value)])}]]])
-
-(defn editor-data-source []
-  [:div
-   {:class "modal-section data-source-editor"}
-   [:h3 "Data source"]
-   [:div
-    {:class "input-wrapper"}
-    [:select
-     {:value (:source @editor-cursor)
-      :on-change #(emit-edit [:set-source (.. % -target -value)])}
-     (for [table (vals (:tables @app-state))]
-       [:option
-        {:key (:id table) :value (:id table)}
-        (:name table)])]]])
+    [:input
+     {:class "input"
+      :type "text"
+      :value (:name @editor-cursor)
+      :auto-focus true
+      :placeholder "New function name"
+      :on-change #(emit-edit [:set-name (.. % -target -value)])}]]])
 
 (defn editor-type []
   [:div
    {:class "modal-section type-editor"}
    [:h3 "Function type"]
    [:div
-    {:class "description-btn-group"}
+    {:class "select-btn-group"}
     (doall
       (for [[function-key function-type] function-types]
         [:button
-         {:class (if (= function-key (:type @editor-cursor))
-                   "description-btn-selected description-btn btn"
-                   "description-btn-deselected description-btn btn")
+         {:class (if (= function-key (-> @editor-cursor :type keyword))
+                   "select-btn select-btn-selected description-btn btn"
+                   "select-btn select-btn-deselected description-btn btn")
           :key function-key
           :on-click #(emit-edit [:set-type function-key])}
          [:div
@@ -268,7 +255,7 @@
      [:div {:class "field-label"} "Parameters"]
      [:div {:class "field-wrapper"}
       [:div {:class "button-select-wrapper"}
-       (if (some? selectable)
+       (if (seq selectable)
          [:div
           {:class "select-group-wrapper"}
           [:div
@@ -281,7 +268,7 @@
               (:name option)])]
           [:div {:class "label"} "Available"]]
          [:div {:class "blank"} "No parameters available"])
-       (if (some? value)
+       (if (seq value)
          [:div
           {:class "select-group-wrapper"}
           [:div
@@ -379,7 +366,7 @@
      #(emit-edit [:set-label [(:id operation) (.. % -target -value)]])}]
    [:div {:class "input-label"} "Function"]
    [:select
-    {:class "input-wrapper"
+    {:class "select"
      :value (:operand operation)
      :on-change
      #(emit-edit [:set-operand [(:id operation) (.. % -target -value)]])}
@@ -455,16 +442,38 @@
 (defn editor-output []
   (let [options (merge
                   (source-columns @app-state)
-                  (:operations @editor-cursor))]
+                  (:operations @editor-cursor))
+        value (:outputs @editor-cursor)]
     [:div
      {:class "modal-section output-editor-container"}
      [:h3 "Outputs"]
-     [multiselect
-      {:on-change #(emit-edit [:set-outputs %])
-       :value (:outputs @editor-cursor)
-       :options options
-       :labelfn :name
-       :header "Outputs"}]]))
+     [:div {:class "button-select-wrapper"}
+       (if (seq options)
+         [:div
+          {:class "select-group-wrapper"}
+          [:div
+           {:class "btn-group select-group"}
+           (for [[option-key option] options]
+             [:button
+              {:class "btn btn-select"
+               :key option-key
+               :on-click #(emit-edit [:set-outputs (conj value option-key)])}
+              (:name option)])]
+          [:div {:class "label"} "Available"]]
+         [:div {:class "blank"} "No parameters available"])
+       (if (seq value)
+         [:div
+          {:class "select-group-wrapper"}
+          [:div
+           {:class "btn-group select-group"}
+           (for [[index param-key] (map-indexed vector value)]
+             [:button
+              {:class "btn btn-select"
+               :key index
+               :on-click #(emit-edit [:set-outputs (remove-i value index)])}
+              (:name (get options param-key))])]
+          [:div {:class "label"} "Selected"]]
+         [:div {:class "blank"} "No outputs selected"])]]))
 
 (defn editor-preview-table []
   [:table
@@ -482,7 +491,7 @@
   [:div
    {:class "modal-section preview"}
    [:h3 "Preview"]
-   (if (not-empty (:outputs @editor-cursor))
+   (if (seq (:outputs @editor-cursor))
      [:div {:class "table-wrapper"} (editor-preview-table)]
      [:div "No data available"])])
 
@@ -501,7 +510,6 @@
    [:div
     {:class "modal-body"}
     [editor-name]
-    [editor-data-source]
     [editor-type]
     [editor-operations]
     [editor-output]

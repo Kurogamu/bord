@@ -11,11 +11,12 @@ $modal-border-color: #404040;
 $border-color: #808080;
 $table-border-color: #404040;
 
-$table-border: $table-border-color .1em solid;
-$table-header-border: $border-color .1em solid;
-$modal-border: $modal-border-color .25em solid;
-$header-border: $border-color .1em solid;
-$button-border: $border-color .1em solid;
+$table-border: $table-border-color .1rem solid;
+$table-header-border: $border-color .1rem solid;
+$modal-border: $modal-border-color .25rem solid;
+$header-border: $border-color .1rem solid;
+$button-border: $border-color .1rem solid;
+$layout-border: $modal-border-color .1rem solid;
 
 $button-background-color: #050505;
 $button-background-hover: #202020;
@@ -46,11 +47,11 @@ body {
   overflow: auto;
   background-color: $modal-background-color;
   border: $modal-border;
-  border-radius: 0 .25em .25em .25em;
+  border-radius: 0 .25rem .25em .25em;
   box-shadow: rgba(10,10,10,.8) 0px 20px 20px 30px;
 
   &-header {
-    padding: 1em;
+    padding: 1rem;
     position: sticky;
     top: 0;
     display: flex;
@@ -58,29 +59,29 @@ body {
 
     font-weight: 800;
     font: 120% serif;
-    border-bottom: $border-color .1em solid;
+    border-bottom: $border-color .1rem solid;
     text-overflow: ellipsis;
     background-color: inherit;
 
     > div {
       flex: 0 1 auto;
       &:not(:first-child) {
-        margin-left: 1em;
+        margin-left: 1rem;
       }
     }
   }
 
   &-body {
-    border-bottom: $border-color .1em solid;
-    padding: 1em 2em;
+    border-bottom: $border-color .1rem solid;
+    padding: 1rem 2em;
   }
 
   h3 {
     padding: 0;
     margin: 0;
-    padding-bottom: 0.5em;
+    padding-bottom: 0.5rem;
     border-bottom: $header-border;
-    margin-bottom: 0.5em;
+    margin-bottom: 0.5rem;
   }
 
   &-section {
@@ -89,7 +90,7 @@ body {
     align-items: stretch;
 
     &:not(:first-child) {
-      margin-top: 2em;
+      margin-top: 2rem;
     }
 
     > button {
@@ -98,10 +99,10 @@ body {
   }
 
   .table-wrapper {
-    margin-top: 1em;
+    margin-top: 1rem;
     background-color: $table-background-color;
-    padding: .5em;
-    border-radius: 1em;
+    padding: .5rem;
+    border-radius: 1rem;
     display: flex;
     flex-direction: column;
 
@@ -121,10 +122,21 @@ body {
     }
 
     th, td {
-      padding: .5em;
+      padding: .5rem;
       text-align: center;
-      min-width: 1em;
-      min-height: 1em;
+      min-width: 1rem;
+      min-height: 1rem;
+    }
+
+    td {
+      cursor: pointer;
+    }
+
+    td > input {
+      text-align: center;
+      padding: 0;
+      margin: 0;
+      box-sizing: border-box;
     }
 
     tr:not(:last-child) {
@@ -138,16 +150,16 @@ body {
     }
 
     > button {
-      margin: 1em auto;
+      margin: 1rem auto;
     }
   }
 
   .operation {
     &:not(:last-child) {
-      margin-bottom: .5em;
+      margin-bottom: .5rem;
     }
-    border: .1em solid $border-color;
-    border-radius: 1em;
+    border: .1rem solid $border-color;
+    border-radius: 1rem;
     background-color: $card-background-color;
 
     transition: background-color .3s;
@@ -168,7 +180,7 @@ body {
       align-items: baseline;
       flex-wrap: wrap;
       justify-content: space-between;
-      padding: .5em 1em 0.25em 1em;
+      padding: .5rem 1em 0.25em 1em;
     }
 
     &-name {
@@ -183,7 +195,7 @@ body {
 
     &-params {
       border-top: $header-border;
-      padding: .25em 1em 1em 1em;
+      padding: .25rem 1em 1em 1em;
       text-align: left;
 
       .number {
@@ -201,7 +213,7 @@ body {
         }
         > span {
           font-style: italic;
-          margin: 0 .5em;
+          margin: 0 .5rem;
           &:not(:first-child) {
             margin-left: 0;
           }
@@ -279,7 +291,7 @@ body {
   }
 
   .operations-actions {
-    margin-top: 1em;
+    margin-top: 1rem;
     align-self: end;
   }
 }
@@ -288,17 +300,17 @@ body {
   display: flex;
   flex-direction: row;
   > div:not(:last-child) {
-    margin-right: 1em;
+    margin-right: 1rem;
   }
-  padding-bottom: 1em;
+  padding-bottom: 1rem;
 }
 
 .button-select-wrapper {
   display: flex;
   flex-direction: column;
   background-color: $button-background-color;
-  border-radius: .5em;
-  padding: .5em 1em;
+  border-radius: .5rem;
+  padding: 1rem;
 
   .select-group-wrapper {
     display: flex;
@@ -306,9 +318,9 @@ body {
   }
 
   > div:not(:first-child) {
-    margin-top: .5em;
+    margin-top: .5rem;
     border-top: $button-border;
-    padding-top: .5em;
+    padding-top: .5rem;
   }
 
   .btn-group {
@@ -318,7 +330,7 @@ body {
   }
 
   .btn-select {
-    margin: 0.25em 0;
+    margin: 0.25rem 0;
   }
 
   .label {
@@ -328,7 +340,7 @@ body {
     font-size: 85%;
     font-style: italic;
     align-self: baseline;
-    margin-left: 1em;
+    margin-left: 1rem;
   }
   
   .blank {
@@ -339,12 +351,12 @@ body {
 
 .grid-editor {
   display: grid;
-  grid-row-gap: .5em;
-  grid-column-gap: 1em;
+  grid-row-gap: .5rem;
+  grid-column-gap: 1rem;
   grid-template-columns: min-content auto;
-  padding: 1em 2em;
+  padding: 1rem 2em;
   border: $button-border;
-  border-radius: 1em;
+  border-radius: 1rem;
   background-color: $card-background-color;
   align-items: baseline;
 
@@ -380,10 +392,10 @@ body {
 
   input, textarea {
     border: none;
-    border-radius: .5em;
+    border-radius: .5rem;
     color: $primary-color;
     background-color: $input-background-color;
-    padding: .5em;
+    padding: .5rem;
     width: auto;
   }
 }
@@ -391,60 +403,80 @@ body {
 .top-menu {
   display: flex;
   flex-direction: row;
-  padding: 1em 2em;
+  padding: 1rem 2em;
   justify-content: space-between;
-  .left-group {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    > div {
-      margin-right: 1em;
-    }
-  }
   .center-group {
     right: 0;
     left: 0;
     margin: auto;
     .title {
       font-weight: 600;
+      cursor: default;
+      &::before {
+        display: inline-block;
+        content: "[";
+        transform: translateX(-.25rem);
+        transition: transform 1s ease;
+      }
+      &::after {
+        display: inline-block;
+        content: "]";
+        transform: translateX(.25rem);
+        transition: transform 1s ease;
+      }
+      &:hover {
+        &::before { transform: translateX(-2rem); }
+        &::after { transform: translateX(2rem); }
+      }
+      color: linear-gradient(pink, blue);
     }
-  }
-  .right-group {
-    flex: 0 0 auto;
   }
 }
 
-.card {
-  border: $border-color .1em solid;
-  border-radius: 0 1em 1em 1em;
-  margin: 1em 2em;
-  padding: 1em 2em;
-  background-color: $card-background-color;
-  cursor: pointer;
-  flex: 0 0 auto;
-
-  &-header {
-    font: 120% serif;
-    font-weight: 600;
-    font-variant: small-caps;
-    border-bottom: $border-color .1em solid;
-    padding-bottom: .25em;
-    text-overflow: ellipsis;
+.card-function {
+  .card-header {
+    &::before {
+      content: "\1D453";
+      margin-right: .5rem;
+      font-weight: normal;
+      font-size: 85%;
+    }
+    border-bottom: $border-color .1rem solid;
   }
 
-  &-subheader {
+  .card-subheader {
+    grid-column: span 2;
     font-size: 85%;
     font-style: italic;
     text-align: right;
     color: $faded-color;
   }
+}
+
+.card {
+  border: $border-color .1rem solid;
+  border-radius: 0 1rem 1em 1em;
+  margin: 1rem 0;
+  &:not(:first-child) {
+    margin-left: 2rem;
+  }
+  padding: 1rem 2em;
+  background-color: $card-background-color;
+  cursor: pointer;
+  flex: 0 0 auto;
+
+  .card-header {
+    font: 120% serif;
+    font-weight: 600;
+    padding-bottom: .25rem;
+    text-overflow: ellipsis;
+  }
 
   &-content {
-    margin-top: 1em;
+    margin-top: 1rem;
     background-color: $table-background-color;
-    padding: .5em;
-    border-radius: 1em;
+    padding: .5rem;
+    border-radius: 1rem;
 
     table {
       margin: 0 auto;
@@ -458,9 +490,9 @@ body {
     }
 
     th, td {
-      padding: .5em;
+      padding: .5rem;
       text-align: center;
-      min-width: 1em;
+      min-width: 1rem;
     }
 
     tr:not(:last-child) {
@@ -482,11 +514,56 @@ body {
   transition: background-color .3s;
 }
 
-.card-container {
+.table-container {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  &:not(:first-child) {
+    margin-top: 2rem;
+  }
+
+  border-top: $layout-border;
+  border-bottom: $layout-border;
+  border-radius: 1rem;
+
+  &-header {
+    font: 150% serif;
+    font-weight: 600;
+    font-variant: small-caps;
+    border-bottom: $border-color .1rem solid;
+    text-overflow: ellipsis;
+    max-width: 68vw;
+    padding: 0 0 .25rem 0;
+    margin: 2rem 1rem .25rem 1rem;
+  }
+
+  &-subheader {
+    font-size: 85%;
+    font-style: italic;
+    color: $faded-color;
+    margin: 0 1rem;
+  }
+
+  &-cards {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 1rem 1rem 2em 1em;
+  }
+
+  &-functions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+}
+
+.button-container {
+  padding: 4rem;
+  display: flex;
+  align-items: center;
   justify-content: space-evenly;
-  align-items: baseline;
 }
 
 .modal-editor {
@@ -531,19 +608,27 @@ body {
   }
 }
 
-.btn, select {
+.btn, .select, .input {
   border: $button-border;
-  border-radius: .5em;
   color: $primary-color;
   transition: .2s linear;
   background-color: $button-background-color;
-  padding: .25em 1em;
-  cursor: pointer;
-
+  padding: .5rem 1em;
   &:hover {
     transition: .2s linear;
     background-color: $button-background-hover;
   }
+}
+
+.input {
+  border-radius: .25rem;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.btn, .select {
+  border-radius: 1rem;
+  cursor: pointer;
 
   &:disabled {
     background-color: $button-background-disabled;
@@ -553,31 +638,19 @@ body {
 
 .btn-group {
   > button:not(:first-child) {
-    margin-left: .5em;
+    margin-left: .5rem;
   }
 }
 
-.description-btn {
+.select-btn {
   &-group {
     display: flex;
     flex-direction: row;
-    margin-top: .5em;
+    margin-top: .5rem;
   }
 
   &:not(:first-child) {
-    margin-left: 1em;
-  }
-
-  &-header {
-    padding: .5em 0;
-    font-weight: 600;
-    font-size: 120%;
-  }
-
-  &-description {
-    border-top: $button-border;
-    padding: .5em 0;
-    font-style: italic;
+    margin-left: 1rem;
   }
 
   &-selected {
@@ -586,5 +659,19 @@ body {
 
   &-deselected {
     color: $faded-color;
+  }
+}
+
+.description-btn {
+  &-header {
+    padding: .5rem 0;
+    font-weight: 600;
+    font-size: 120%;
+  }
+
+  &-description {
+    border-top: $button-border;
+    padding: .5rem 0;
+    font-style: italic;
   }
 }

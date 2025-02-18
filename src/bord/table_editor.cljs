@@ -236,7 +236,8 @@
    [:div
     {:class "input-wrapper"}
     [:input
-     {:type "text"
+     {:class "input"
+      :type "text"
       :value (get-in @editor-cursor [:meta :name])
       :auto-focus true
       :placeholder "New table name"
@@ -248,7 +249,8 @@
    [:div
     {:class "input-wrapper"}
     [:input
-     {:type "text"
+     {:class "input"
+      :type "text"
       :value (get-in @editor-cursor [:meta :columns column-id :name])
       :auto-focus true
       :placeholder "New column name"
@@ -257,7 +259,8 @@
    [:div
     {:class "input-wrapper"}
     [:select
-     {:value (get-in @editor-cursor [:meta :columns column-id :type])
+     {:class "select"
+      :value (get-in @editor-cursor [:meta :columns column-id :type])
       :on-change #(emit-edit-meta
                     [:set-column-type [column-id (.. % -target -value)]])}
      [:option { :value :string } "Text"]
@@ -285,7 +288,8 @@
                         v)
                       (emit-edit-fragment [:edit-cell v])))]
     [:input
-     {:type (if (= column-type :number) "number" "text")
+     {:class "input"
+      :type (if (= column-type :number) "number" "text")
       :auto-focus true
       :value value
       :placeholder "New value"
@@ -354,8 +358,8 @@
     {:class "modal-header"}
     [:div {:class "modal-title"} "Table Editor"]
     [:div {:class "modal-menu btn-group"}
-    [:button {:class "delete" :on-click delete} "Delete"]
-    [:button {:class "close" :on-click close-table-editor} "Close"]]]
+    [:button {:class "btn btn-delete" :on-click delete} "Delete"]
+    [:button {:class "btn btn-close" :on-click close-table-editor} "Close"]]]
    [:div
     {:class "modal-body"}
     [:div

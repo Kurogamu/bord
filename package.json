@@ -11,6 +11,8 @@
   },
   "scripts": {
     "sass": "sass --watch src/stylesheets:public/css",
+    "app": "npx shadow-cljs watch app",
+    "cljs-build": "npx shadow-cljs release app",
     "css-build": "sass src/stylesheets:public/css",
     "lib-build": "npx webpack --output-path public/js/"
   }

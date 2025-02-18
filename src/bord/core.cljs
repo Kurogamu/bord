@@ -33,19 +33,8 @@
   [:div
    {:class "top-menu"}
    [:div
-    {:class "left-group btn-group"}
-    [:button
-     {:class "btn add-table-btn"
-      :on-click #(load-table-editor :new)}
-     "Add table"]
-    [:button
-     {:class "btn add-fn-btn"
-      :on-click #(load-function-editor :new)}
-     "Add function"]]
-   [:div
     {:class "center-group"}
-    [:div {:class "title"} "[Bord]"]]
-   [:div {:class "right-group"} ""]])
+    [:div {:class "title"} "bord"]]])
 
 (defn render-cell [{:keys [data]}]
   (if (some? data)
@@ -68,18 +57,6 @@
          [render-cell
           {:key column-id :data (get row-data column-id)}])])]])
 
-(defn data-table [data]
-  [:div {:class "card-container table-container"}
-   (for [entry (vals data)]
-     [:div {:key (:id entry)
-            :class "card card-table"
-            :on-click #(load-table-editor entry)}
-      [:div {:class "card-header"}
-       (:name entry)]
-      [:div {:class "card-subheader"}
-       (.toLocaleString (js/Date. (:updated entry)))]
-      (render-table-data entry)])])
-
 (defn render-function-preview [function]
   [:div {:class "card-content table"}
    [:table
@@ -93,30 +70,71 @@
          (for [[id value] result-row]
            [:td {:key id} (or (str value) "Blank")])]))]])
 
-(defn functions [data]
-  [:div {:class "card-container functions-container"}
-   (doall
-     (for [entry (vals data)]
-       [:div
-        {:key (:id entry)
-         :class "card card-function"
-         :on-click #(load-function-editor entry)}
-        [:div {:class "card-header"} (:name entry)]
+(defn function-card [function]
+  [:div
+   {:key (:id function)
+    :class "card card-function"
+    :on-click #(load-function-editor function)}
+   [:div {:class "card-header"} (:name function)]
+   [:div
+    {:class "card-subheader"}
+    (.toLocaleString (js/Date. (:updated function)))]
+   (render-function-preview function)])
+
+(defn table-card [table]
+  [:div
+   {:class "card card-table"
+    :on-click #(load-table-editor table)}
+   [:div {:class "card-header"} "Data"]
+   (render-table-data table)])
+
+(defn table-collection [table]
+  (let [table-functions (filter
+                          #(= (:id table) (:source %))
+                          (vals (:functions @app-state)))]
+    [:div
+     {:key (:id table)
+      :class "table-container"}
+     [:div
+      {:class "table-container-header"
+       :on-click #(load-table-editor table)}
+      (:name table)]
+     [:div
+      {:class "table-container-subheader"}
+      (-> table :updated js/Date. .toLocaleString)]
+     [:div
+      {:class "table-container-cards"}
+      (table-card table)
+      (doall (map function-card table-functions))
+      [:div
+       {:class "button-container"}
+       [:button
+        {:class "btn description-btn"
+         :on-click #(load-function-editor {:source (:id table)})}
         [:div
-         {:class "card-subheader"}
-         (.toLocaleString (js/Date. (:updated entry)))]
-        (render-function-preview entry)]))])
+         {:class "description-btn-header"}
+         "Add Function"]
+        [:div
+         {:class "description-btn-description"}
+         "Apply calculations on table data"]]]]]))
+
+(defn main-container [data]
+  [:div {:class "main-container"}
+   (doall (map table-collection (vals data)))
+   [:div
+    {:class "button-container"}
+    [:button
+     {:class "btn add-table-btn"
+      :on-click #(load-table-editor :new)}
+     [:div {:class "description-btn-header"} "Add Table"]
+     [:div {:class "description-btn-description"} "Create new table"]]]])
 
 (defn main [state]
   [:div {:class "main"}
    (if (count (:tables @app-state))
-     (data-table (:tables @app-state)))
+     (main-container (:tables @app-state)))
    (if (:tables-loading @app-state)
      [:div "loading tables..."])
-   (if (count (:functions @app-state))
-     (functions (:functions @app-state)))
-   (if (:functions-loading @app-state)
-     [:div "loading functions..."])
    (if (some? (:table-editor @app-state))
      [table-editor])
    (if (some? (:function-editor @app-state))
@@ -142,11 +160,6 @@
           (if (and (nil? (:table-editor @app-state))
                    (nil? (:function-editor @app-state)))
             (load-table-editor :new))
-
-          "f"
-          (if (and (nil? (:table-editor @app-state))
-                   (nil? (:function-editor @app-state)))
-            (load-function-editor :new))
 
           "Escape" (emit [:close-editor nil])
           nil))
