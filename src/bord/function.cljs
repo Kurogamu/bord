@@ -1,5 +1,6 @@
 (ns bord.function
   (:require
+    [bord.common :refer [read-number read-boolean]]
     [reagent.core :as r]))
 
 (def const-operations
@@ -7,8 +8,8 @@
                      :param-type :input-number
                      :result-type :number}
    :string-constant {:label "Text Constant"
-                   :param-type :input-string
-                   :result-type :string}})
+                     :param-type :input-string
+                     :result-type :string}})
 
 (def map-operations
   {:sum {:label "Sum"
@@ -22,10 +23,7 @@
              :result-type :number}
    :divide {:label "Divide"
              :param-type :source-number
-             :result-type :number}
-   :format {:label "Format"
-            :param-type :source-string
-            :result-type :string}})
+             :result-type :number}})
 
 (def filter-operations
   {:equals {:label "Equals"
@@ -41,10 +39,10 @@
                   :param-type :source-string
                   :result-type :boolean}
    :or {:label "Or"
-        :param-type :boolean
+        :param-type :source-boolean
         :result-type :boolean}
    :and {:label "And"
-         :param-type :boolean
+         :param-type :source-boolean
          :result-type :boolean}})
 
 (def reduce-operations
@@ -79,21 +77,72 @@
             :operations (merge reduce-operations const-operations)}})
 
 (defn run-operation [data operation]
-  (let [values (map #(get data %) (:params operation))]
-    (case (keyword (:operand operation))
-      :number-constant (:params operation)
+  (let [operand (keyword (:operand operation))
+        params (map #(get data %) (:params operation))
+        values (map
+                 (fn [param]
+                   (case (param-type operand)
+                     :source-boolean (read-boolean param)
+                     :source-number (read-number param)
+                     param))
+                 params)]
+    (case operand
+      :number-constant (read-number (:params operation))
       :string-constant (:params operation)
       :sum (apply + values)
       :subtract (apply - values)
       :product (apply * values)
       :divide (apply / values)
-      :format (first values)
+      :equals (apply = values)
+      :not-equals (apply not= values)
+      :contains (every? #(contains? (first values) %) (rest values))
+      :not-contains (not-every? #(contains? (first values) %) (rest values))
+      :or (some true? values)
+      :and (every? identity values)
+      :concat (apply conj values)
       nil)))
 
-(defn process-row [row-data function]
-  (let [results (reduce 
-                  (fn [data operation]
-                    (assoc data (:id operation) (run-operation data operation)))
-                  row-data
-                  (vals (:operations function)))]
-    (mapv #(vector % (get results %)) (:outputs function))))
+(defn process-row [input-row operations]
+  (reduce 
+    (fn [results [operation-id operation]]
+      (assoc results operation-id (run-operation results operation)))
+    input-row
+    operations))
+
+(defn run-map [data function]
+  (mapv 
+    (fn [data-row]
+      (-> data-row
+          (process-row (:operations function))
+          (select-keys (:outputs function))))
+    data))
+
+(defn run-filter [data function]
+  (->> data
+       (mapv #(process-row % (:operations function)))
+       (filter #(get % (last (:sort-operations function))))
+       (mapv #(select-keys % (:outputs function)))))
+
+(defn run-reduce [data function]
+  (let [operations (reduce 
+                     (fn [result [id op]]
+                       (assoc
+                         result
+                         id (update op :params #(cons id %))))
+                     {}
+                     (:operations function))
+        init-values (update-vals (:operations function) (fn [op] 0))]
+    (->
+      (reduce
+        #(-> (merge %1 %2) (process-row operations))
+        init-values
+        data)
+      (select-keys (:outputs function))
+      (vector))))
+
+
+(defn run-function [data function]
+  (case (keyword (:type function))
+    :map (run-map data function)
+    :filter (run-filter data function)
+    :reduce (run-reduce data function)))

@@ -7,7 +7,9 @@
     [bord.data :refer [put-function delete-function]]
     [bord.function :refer [all-operations
                            function-types
-                           param-type result-type process-row]]
+                           param-type
+                           result-type
+                           run-function]]
     [bord.select-modal :refer [multiselect]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
@@ -166,9 +168,9 @@
       (swap! store-function-queue dec))))
 
 (defn calculate-preview []
-  (let [results (mapv
-                  #(process-row % @editor-cursor)
-                  (get-preview-data @app-state))]
+  (let [results (run-function
+                  (get-preview-data @app-state)
+                  @editor-cursor)]
     (emit [:set-preview results] handler)))
 
 (defn emit-edit [msg]
@@ -239,15 +241,23 @@
           (map #(vector % (get-in @editor-cursor [:operations %]))))
 
         selectable-operations
-        (if (= value-type :source-number)
+        (case value-type
+          :source-number
           (->> preceding-operations
                (filter #(= :number (-> % second :operand keyword result-type)))
+               (into {}))
+          :source-boolean
+          (->> preceding-operations
+               (filter #(= :boolean (-> % second :operand keyword result-type)))
                (into {}))
           (into {} preceding-operations))
 
         selectable-columns
-        (if (= value-type :source-number)
+        (case value-type
+          :source-number
           (source-number-columns @app-state)
+          :source-boolean
+          {}
           (source-columns @app-state))
 
         selectable (merge selectable-operations selectable-columns)]
@@ -297,6 +307,7 @@
         props {:id id :value-type value-type :value params}]
     (case value-type
       :source-number [editor-parameters-select props]
+      :source-boolean [editor-parameters-select props]
       :source-string [editor-parameters-select props]
       [editor-parameters-value props])))
 
@@ -440,13 +451,15 @@
         "Reorder"]])]])
 
 (defn editor-output []
-  (let [options (merge
-                  (source-columns @app-state)
-                  (:operations @editor-cursor))
+  (let [options (case (keyword (:type @editor-cursor))
+                  :filter (source-columns @app-state)
+                  (merge
+                    (source-columns @app-state)
+                    (:operations @editor-cursor)))
         value (:outputs @editor-cursor)]
     [:div
      {:class "modal-section output-editor-container"}
-     [:h3 "Outputs"]
+     [:h3 "Output Columns"]
      [:div {:class "button-select-wrapper"}
        (if (seq options)
          [:div
@@ -490,8 +503,10 @@
 (defn editor-preview []
   [:div
    {:class "modal-section preview"}
-   [:h3 "Preview"]
-   (if (seq (:outputs @editor-cursor))
+   [:h3 "Preview Results"]
+   (if (or
+         (seq (:outputs @editor-cursor))
+         (seq (:preview @editor-cursor)))
      [:div {:class "table-wrapper"} (editor-preview-table)]
      [:div "No data available"])])
 
