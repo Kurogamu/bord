@@ -6,12 +6,15 @@
  :builds       {:app {:target     :browser
                       :output-dir "public/js"
                       :asset-path "/js"
-                      :modules    {:app {:entries [bord.core
-                                                   bord.state
-                                                   bord.function
-                                                   bord.select-modal
-                                                   bord.table-editor
-                                                   bord.function-editor]}}
+                      :modules
+                      {:shared {:entries []}
+                       :app
+                       {:init-fn bord.core/init
+                        :depends-on #{:shared}}
+                       :worker
+                       {:init-fn bord.worker/init
+                        :depends-on #{:shared}
+                        :web-worker true}}
                       :js-options {:js-provider :external :external-index "target/index.js"}
                       :devtools   {:after-load bord.core/mount-root}}}
 

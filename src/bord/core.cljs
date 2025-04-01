@@ -176,9 +176,17 @@
         on-error #(js/console.error "Failed to init db!" %)]
     (db-init {:on-success on-success :on-error on-error})))
 
+(defn init-worker []
+  (let [worker (js/Worker. "js/worker.js")]
+    (.. worker
+        (addEventListener "message"
+                          (fn [e] (js/console.log "hello from worker " e))))
+    (.. worker (postMessage "hello to worker"))))
+
 (defn init []
   (mount-root)
   (init-db)
+  (init-worker)
   (keydown-handler))
 
 (js/document.addEventListener "DOMContentLoaded" init)
