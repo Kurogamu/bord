@@ -3,6 +3,8 @@
     [bord.state :refer [app-state emit function-outputs]]
     [bord.table-editor :refer [load-table-editor table-editor]]
     [bord.function-editor :refer [load-function-editor function-editor]]
+    [bord.table-uploader :refer [table-uploader]]
+    [bord.worker-handler :refer [init-worker]]
     [cljs.core.async :refer [go go-loop chan put!]]
     [bord.data :refer [db-init read-all-tables read-all-functions]]
     [reagent.core :as r]
@@ -25,6 +27,9 @@
 (defn read-db []
   (read-tables)
   (read-functions))
+
+(defn load-table-uploader []
+  (emit [:set-table-upload-dialog true]))
 
 ;; -------------------------
 ;; View
@@ -127,7 +132,12 @@
      {:class "btn add-table-btn"
       :on-click #(load-table-editor :new)}
      [:div {:class "description-btn-header"} "Add Table"]
-     [:div {:class "description-btn-description"} "Create new table"]]]])
+     [:div {:class "description-btn-description"} "Create new table"]]
+    [:button
+     {:class "btn upload-table-btn"
+      :on-click load-table-uploader}
+     [:div {:class "description-btn-header"} "Upload Table"]
+     [:div {:class "description-btn-description"} "Create table from file"]]]])
 
 (defn main [state]
   [:div {:class "main"}
@@ -138,7 +148,9 @@
    (if (some? (:table-editor @app-state))
      [table-editor])
    (if (some? (:function-editor @app-state))
-     [function-editor])])
+     [function-editor])
+   (if (some? (:table-uploader @app-state))
+     [table-uploader])])
 
 (defn app-root [state]
   [:div {:class "app-root"}
@@ -176,14 +188,8 @@
         on-error #(js/console.error "Failed to init db!" %)]
     (db-init {:on-success on-success :on-error on-error})))
 
-(defn init-worker []
-  (let [worker (js/Worker. "js/worker.js")]
-    (.. worker
-        (addEventListener "message"
-                          (fn [e] (js/console.log "hello from worker " e))))
-    (.. worker (postMessage "hello to worker"))))
-
 (defn init []
+  (js/console.info "Initializing app..")
   (mount-root)
   (init-db)
   (init-worker)

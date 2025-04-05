@@ -20,7 +20,7 @@
 (defn init-column-data []
   {:id (js/crypto.randomUUID)
    :name ""
-    :type :string})
+   :type :string})
 
 (defn init-fragment-data [table-id]
   {:id (js/crypto.randomUUID)
@@ -190,8 +190,8 @@
   (let [success-callback #(js/console.info "Fragment saved")
         error-callback #(js/console.error "Failed to create table!" %)]
     (put-fragment {:data (:fragment @editor-cursor)
-                  :on-complete success-callback
-                  :on-error error-callback})))
+                   :on-complete success-callback
+                   :on-error error-callback})))
 
 (defn debounce-store-fragment []
   (go
@@ -263,8 +263,9 @@
       :value (get-in @editor-cursor [:meta :columns column-id :type])
       :on-change #(emit-edit-meta
                     [:set-column-type [column-id (.. % -target -value)]])}
-     [:option { :value :string } "Text"]
-     [:option { :value :number } "Number"]]]])
+     [:option {:value :string} "Text"]
+     [:option {:value :boolean} "Boolean"]
+     [:option {:value :number} "Number"]]]])
 
 (defn editor-columns []
   [:div {:class "modal-section column-set-editor"}

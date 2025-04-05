@@ -52,13 +52,11 @@
     #js {:once true}))
 
 (defn read-number [value]
-  (if (number? value)
-    value
-    (->> value
-         (re-find #"[0-9., ]*")
-         (cljs.reader/read-string))))
+  (-> value
+      (clojure.string/replace #"[^0-9., ]" "")
+      (cljs.reader/read-string)))
 
 (defn read-boolean [value]
-  (->> value
-       (re-find #"(true|false)")
-       (cljs.reader/read-string)))
+  (-> value
+      (clojure.string/replace #"(true|false)" "")
+      (cljs.reader/read-string)))

@@ -10,7 +10,8 @@
    :table-editor nil
    :function-editor nil
    :tables-loading false
-   :functions-loading false})
+   :functions-loading false
+   :table-uploader nil})
 
 (defonce app-state (r/atom default-state))
 
@@ -26,8 +27,9 @@
     :set-functions-loading (assoc state :functions-loading value)
     :open-editor-table (assoc state :table-editor {:meta value})
     :set-editor-table (assoc-in state [:table-editor :meta] value)
-    :close-editor (assoc state :table-editor nil :function-editor nil)
+    :close-editor (assoc state :table-editor nil :function-editor nil :table-uploader nil)
     :set-editor-function (assoc state :function-editor {:function value})
+    :set-table-upload-dialog (assoc state :table-uploader {})
     state))
 
 (defn emit

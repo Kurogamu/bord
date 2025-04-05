@@ -1,9 +1,8 @@
 (ns bord.data
   (:require
-    [clojure.walk :refer [keywordize-keys stringify-keys postwalk]]
-    [reagent.core :as r]))
+    [clojure.walk :refer [keywordize-keys stringify-keys postwalk]]))
 
-(defonce loaded-db (r/atom nil))
+(defonce loaded-db (atom nil))
 (def db-name "bord-default")
 (def db-version 11)
 (def meta-store-name "table-meta")
@@ -40,6 +39,16 @@
       (update-keys #(clojure.string/replace % #"-" "_"))
       clj->js))
 
+(defn indexed-db []
+  (if (-> js/self .-document undefined?)
+    js/self.indexedDB
+    js/window.indexedDB))
+
+(defn idb-key-range []
+  (if (-> js/self .-document undefined?)
+    js/self.IDBKeyRange
+    js/window.IDBKeyRange))
+
 (defn init-table-meta-store [db]
   (doto (.createObjectStore db meta-store-name #js {"keyPath" "id"})
     (.createIndex "name" "name" #js {"unique" false})
@@ -69,7 +78,7 @@
     (reset! loaded-db db)))
 
 (defn db-init [{:keys [on-success on-error]}]
-  (let [db-request (js/window.indexedDB.open db-name db-version)]
+  (let [db-request (.open (indexed-db) db-name db-version)]
     (set!
       (.-onsuccess db-request)
       #(db-init-onsuccess db-request on-success))
@@ -96,7 +105,7 @@
           (on-complete nil))))))
 
 (defn read-all-cursor [store on-complete]
-  (let [result (r/atom [])]
+  (let [result (atom [])]
     (set!
       (.-onsuccess store)
       (fn [event]
@@ -178,7 +187,6 @@
          :command "readonly"
          :on-complete #(js/console.info "Cursor completed")
          :on-error #(js/console.error "Cursor failed: " %)}]
-
     (-> (get-transaction transaction-params)
         (.objectStore function-store-name)
         .openCursor
@@ -186,24 +194,33 @@
 
 (defn fetch-fragment [{:keys [table-id row-number on-complete]}]
   (let [params (clj->js [table-id row-number])
-        cursor-range (js/window.IDBKeyRange.lowerBound params)
+        cursor-range (.lowerBound (idb-key-range) params)
         transaction-params
         {:store-names [fragment-store-name]
          :command "readonly"
          :on-complete #(js/console.info "Fragment fetched")
-         :on-error #(js/console.error "Fragment fetch failed: " %)}
-
-        cursor-callback
-        (fn [result]
-          (if (some? result)
-            (on-complete (stored-entry->clj result))
-            (on-complete nil)))]
-
+         :on-error #(js/console.error "Fragment fetch failed: " %)}]
     (-> (get-transaction transaction-params)
         (.objectStore fragment-store-name)
         (.index "row")
         (.openCursor cursor-range)
-        (read-first-cursor cursor-callback))))
+        (read-first-cursor
+          #(on-complete (some-> % stored-entry->clj))))))
+
+(defn fetch-meta [{:keys [table-id on-complete on-error]}]
+  (let [transaction-params
+        {:store-names [meta-store-name]
+         :command "readonly"
+         :on-complete #(js/console.info "Meta fetched")
+         :on-error #(js/console.error "Meta fetch failed: " %)}
+        request
+        (-> (get-transaction transaction-params)
+            (.objectStore meta-store-name)
+            (.get table-id))]
+    (set!
+      (.-onsuccess request)
+      #(on-complete (some-> request .-result stored-entry->clj)))
+    (set! (.-onerror request) on-error)))
 
 (defn delete-table [{:keys [table-id on-complete]}]
   (let [store-names [meta-store-name fragment-store-name]
@@ -212,13 +229,12 @@
          :command "readwrite"
          :on-complete on-complete
          :on-error #(js/console.error "Data deletion failed: " %)}]
-
     (doto (get-transaction transaction-params)
       (-> (.objectStore meta-store-name)
           (.delete table-id))
       (-> (.objectStore fragment-store-name)
           (.index "table")
-          (.openCursor (js/window.IDBKeyRange.only table-id))
+          (.openCursor (.only (idb-key-range) table-id))
           (delete-all-cursor #(js/console.log "fragments deleted"))))))
 
 (defn delete-function [{:keys [function-id on-complete]}]
@@ -227,7 +243,6 @@
          :command "readwrite"
          :on-complete on-complete
          :on-error #(js/console.error "Data deletion failed: " %)}]
-
     (-> (get-transaction transaction-params)
         (.objectStore function-store-name)
         (.delete function-id))))
