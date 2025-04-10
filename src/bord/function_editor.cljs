@@ -4,13 +4,13 @@
     [clojure.string :refer [blank?]]
     [bord.state :refer [app-state emit function-outputs]]
     [bord.common :refer [find-first-i remove-i move-i remove-match swap-i animation-trigger]]
-    [bord.data :refer [put-function delete-function]]
+    [bord.data :refer [put-function delete-function fetch-fragment]]
     [bord.function :refer [all-operations
                            function-types
                            param-type
                            result-type
                            run-function]]
-    [bord.select-modal :refer [multiselect]]
+    [bord.function-process :refer [trigger-process]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
 
@@ -127,6 +127,11 @@
             (assoc-in [:function-editor :moving-operation] nil)
             (update-in (data-path :sort-operations) move-i source target)))
 
+      :set-mode
+      (assoc-in state [:function-editor :mode] value)
+      :set-fragment
+      (assoc-in state [:function-editor :fragment] value)
+
       state)))
 
 ;; -------------------------
@@ -141,9 +146,17 @@
        :on-complete success-callback
        :on-error error-callback})))
 
+(defn load-fragment [row-number]
+  (fetch-fragment {:table-id (:id @editor-cursor)
+                   :row-number row-number
+                   :limit 100
+                   :on-complete #(emit [:set-fragment %] handler)}))
+
 (defn load-function-editor [function]
   (if (contains? function :id)
-    (emit [:set-editor-function function])
+    (do
+      (emit [:set-editor-function function])
+      (load-fragment 0))
     (setup-new-function function)))
 
 (def store-function-queue (r/atom 0))
@@ -177,6 +190,9 @@
   (emit msg handler)
   (calculate-preview)
   (debounce-store-function))
+
+(defn process []
+  (trigger-process (:id @editor-cursor)))
 
 (defn close-modal []
   (animation-trigger "slide-out" emit [:close-editor nil])
@@ -510,6 +526,30 @@
      [:div {:class "table-wrapper"} (editor-preview-table)]
      [:div "No data available"])])
 
+(defn editor []
+  [:div.modal-body
+   [editor-name]
+   [editor-type]
+   [editor-operations]
+   [editor-output]
+   [editor-preview]])
+
+(defn viewer []
+  [:div.viewer
+   [:table
+    [:tr
+     (doall
+       (for [output (function-outputs @editor-cursor)]
+         [:th {:key (:id output)} (:name output)]))]
+    (for [[index result-row]
+          (map-indexed vector
+                       (take
+                         100
+                         (get-in @app-state [:function-editor :fragment :data])))]
+      [:tr {:key index}
+       (for [[id value] result-row]
+         [:td {:key id} (or (str value) "Blank")])])]])
+
 (defn function-editor []
   [:div
    {:class (if (:closing (:function-editor @app-state))
@@ -517,15 +557,14 @@
              "modal modal-editor")}
    [:div
     {:class "modal-header"}
-    [:div {:class "modal-title"} "Function Editor"]
+    [:div {:class "modal-title"} "Function"]
     [:div
      {:class "modal-menu btn-group"}
+     [:button {:class "btn edit-btn" :on-click #(emit [:set-mode :edit] handler)} "Edit"]
+     [:button {:class "btn view-btn" :on-click #(emit [:set-mode :view] handler)} "View"]
+     [:button {:class "btn process-btn" :on-click process} "Run"]
      [:button {:class "btn delete-btn" :on-click delete} "Delete"]
      [:button {:class "btn close-btn" :on-click close-editor} "Close"]]]
-   [:div
-    {:class "modal-body"}
-    [editor-name]
-    [editor-type]
-    [editor-operations]
-    [editor-output]
-    [editor-preview]]])
+    (if (= :view (get-in @app-state [:function-editor :mode]))
+      [viewer]
+      [editor])])

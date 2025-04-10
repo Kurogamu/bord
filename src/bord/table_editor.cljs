@@ -27,6 +27,7 @@
    :table-id table-id
    :first-row 0
    :last-row 0
+   :offset 0
    :data [{}]})
 
 (defn init-table-data []

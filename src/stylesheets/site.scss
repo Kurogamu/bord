@@ -134,8 +134,13 @@ body {
 .task-viewer {
   min-height: 2rem;
   .task-list {
-    display: flex;
+    display: column;
     flex-direction: row;
+    .task {
+      padding-top: 1rem;
+      padding-bottom: 1rem;
+    }
+
     .task:not(:first-child) {
       border-top: $layout-border;
     }

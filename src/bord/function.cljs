@@ -140,7 +140,6 @@
       (select-keys (:outputs function))
       (vector))))
 
-
 (defn run-function [data function]
   (case (keyword (:type function))
     :map (run-map data function)

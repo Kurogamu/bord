@@ -5,7 +5,7 @@
 
 (defonce workers (atom {}))
 
-(def num-workers 2)
+(def num-workers 4)
 
 (defn- state-handler [state [event value worker-id]]
   (case event

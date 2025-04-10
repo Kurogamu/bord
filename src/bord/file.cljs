@@ -45,14 +45,12 @@
         #(zipmap (map :id columns) (str/split % #","))
         preview-rows))))
 
-(defn create-fragment [{:keys [table-id first-row data]}]
-  {:id (js/crypto.randomUUID)
-   :table-id table-id
-   :first-row first-row
-   :last-row (+ first-row (count data))
-   :data data})
+(defn create-fragment [{:as args :keys [table-id first-row data offset]}]
+  (assoc args
+         :id (js/crypto.randomUUID)
+         :last-row (+ first-row (count data))))
 
-(defn store-rows [data-rows table-meta row-counter on-progress]
+(defn store-rows [data-rows table-meta row-counter fragment-counter on-progress]
   (if (nil? data-rows)
     (on-progress 1) ; update meta
     (let [processed
@@ -63,8 +61,10 @@
           (create-fragment
             {:table-id (:id table-meta)
              :first-row @row-counter
+             :offset @fragment-counter
              :data processed})]
       (swap! row-counter + (count processed))
+      (swap! fragment-counter inc)
       (put-fragment
         {:data fragment
          :on-complete
@@ -73,7 +73,8 @@
          #(js/console.error "Fragment failed " (clj->js fragment))}))))
 
 (defn store-file-data [{:keys [url table-id on-progress]}]
-  (let [row-counter (atom 0)]
+  (let [row-counter (atom 0)
+        fragment-counter (atom 0)]
     (fetch-meta
       {:table-id table-id
        :on-complete
@@ -81,5 +82,5 @@
          (on-progress 0)
          (fetch-read-lines 
            url
-           #(store-rows % table-meta row-counter on-progress)))
+           #(store-rows % table-meta row-counter fragment-counter on-progress)))
        :on-error #(js/console.error "fetch meta failed" %)})))

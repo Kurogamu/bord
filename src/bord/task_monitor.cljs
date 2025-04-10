@@ -20,6 +20,12 @@
         {:key (:id table-meta)
          :description (str "Upload table " (:name table-meta))
          :progress (or (:progress task) nil)})
+      :process-function
+      (let [function
+            (get-in @app-state [:functions (first value)])]
+        {:key (:id function)
+         :description (str "Process function " (:name function))
+         :progress (or (:progress task) nil)})
       {})))
 
 (defn task-summary []

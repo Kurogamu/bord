@@ -54,7 +54,7 @@
 (defn read-number [value]
   (-> value
       (clojure.string/replace #"[^0-9., ]" "")
-      (cljs.reader/read-string)))
+      js/Number))
 
 (defn read-boolean [value]
   (-> value
