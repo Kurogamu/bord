@@ -53,7 +53,7 @@
    :data data})
 
 (defn store-rows [data-rows table-meta row-counter on-progress]
-  (if (empty? data-rows)
+  (if (nil? data-rows)
     (on-progress 1) ; update meta
     (let [processed
           (map

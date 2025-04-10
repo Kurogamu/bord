@@ -14,9 +14,11 @@ $table-border-color: #404040;
 $table-border: $table-border-color .1rem solid;
 $table-header-border: $border-color .1rem solid;
 $modal-border: $modal-border-color .25rem solid;
+$popup-border: $modal-border-color .1rem solid;
 $header-border: $border-color .1rem solid;
 $button-border: $border-color .1rem solid;
 $layout-border: $modal-border-color .1rem solid;
+$tab-border: $primary-color .15rem solid;
 
 $button-background-color: #050505;
 $button-background-hover: #202020;
@@ -30,10 +32,128 @@ body {
   background-color: $background-color;
 }
 
+.app-root {
+  height: 100vh;
+  width: 100vw;
+}
+
+.top-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3rem;
+  padding: 1rem 2em;
+
+  background-color: $table-background-color;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+
+  .center-group {
+    position: fixed;
+    left: 42%;
+    right: 42%;
+    text-align: center;
+    .title {
+      font-weight: 200;
+      font-style: italic;
+      font-size: 162%;
+      cursor: default;
+      &::before {
+        display: inline-block;
+        content: "[";
+        transform: translateX(-.25rem);
+        transition: transform 1s ease;
+      }
+      &::after {
+        display: inline-block;
+        content: "]";
+        transform: translateX(.25rem);
+        transition: transform 1s ease;
+      }
+      &:hover {
+        &::before { transform: translateX(-2rem); }
+        &::after { transform: translateX(2rem); }
+      }
+      color: linear-gradient(pink, blue);
+    }
+  }
+  
+  .right-group {
+    justify-self: end;
+  }
+}
 
 .main {
-  height: 100vh;
-  height: 100vw;
+  margin-top: 4rem; // Hack for fixed top bar
+}
+
+.popup {
+  position: fixed;
+  right: 2rem;
+  top: 4rem;
+  padding: 1rem;
+  max-width: 86vw;
+  border-radius: .5rem;
+  border: $popup-border;
+  background-color: $background-color;
+
+  .tab-selector {
+    font-size: 100%;
+    font-weight: 600;
+    color: $primary-color;
+    border: none;
+    border-bottom: transparent .15rem solid;
+    background-color: inherit;
+    border-radius: 0;
+    cursor: pointer;
+    text-transform: capitalize;
+
+    &-container {
+      display: flex;
+      flex-direction: row;
+      margin-bottom: 1rem;
+    }
+
+    &:hover {
+      background-color: #ffffff20;
+    }
+
+    &-active {
+      border-bottom: $tab-border;
+    }
+
+    &:not(:first-child) {
+      margin-left: 1rem;
+    }
+  }
+}
+
+.task-viewer {
+  min-height: 2rem;
+  .task-list {
+    display: flex;
+    flex-direction: row;
+    .task:not(:first-child) {
+      border-top: $layout-border;
+    }
+  }
+}
+
+.task-summary {
+  display: grid;
+  flex-direction: row;
+  cursor: pointer;
+  grid-template-columns: repeat(4, 1fr);
+  grid-column-gap: .25rem;
+  justify-items: end;
+  .description {
+    grid-row-start: 1;
+    grid-column-start: 1;
+    grid-column-end: 5;
+  }
 }
 
 .modal {
@@ -61,6 +181,7 @@ body {
     font: 120% serif;
     border-bottom: $border-color .1rem solid;
     text-overflow: ellipsis;
+    align-items: baseline;
     background-color: inherit;
 
     > div {
@@ -409,39 +530,6 @@ body {
   }
 }
 
-.top-menu {
-  display: flex;
-  flex-direction: row;
-  padding: 1rem 2em;
-  justify-content: space-between;
-  .center-group {
-    right: 0;
-    left: 0;
-    margin: auto;
-    .title {
-      font-weight: 600;
-      cursor: default;
-      &::before {
-        display: inline-block;
-        content: "[";
-        transform: translateX(-.25rem);
-        transition: transform 1s ease;
-      }
-      &::after {
-        display: inline-block;
-        content: "]";
-        transform: translateX(.25rem);
-        transition: transform 1s ease;
-      }
-      &:hover {
-        &::before { transform: translateX(-2rem); }
-        &::after { transform: translateX(2rem); }
-      }
-      color: linear-gradient(pink, blue);
-    }
-  }
-}
-
 .card-function {
   .card-header {
     &::before {
@@ -486,6 +574,9 @@ body {
     background-color: $table-background-color;
     padding: .5rem;
     border-radius: 1rem;
+    height: 16rem;
+    width: 16rem;
+    overflow: clip;
 
     table {
       margin: 0 auto;
@@ -502,6 +593,9 @@ body {
       padding: .5rem;
       text-align: center;
       min-width: 1rem;
+      max-width: 3rem;
+      overflow: clip;
+      text-overflow: ellipsis;
     }
 
     tr:not(:last-child) {

@@ -6,12 +6,17 @@
 ;; Model
 
 (def default-state
-  {:tables []
+  {:tables {}
    :table-editor nil
    :function-editor nil
+   :table-uploader nil
    :tables-loading false
    :functions-loading false
-   :table-uploader nil})
+   :tasks {:running {}
+           :queued []
+           :completed []
+           :failed []}
+   :task-viewer nil})
 
 (defonce app-state (r/atom default-state))
 
@@ -30,6 +35,10 @@
     :close-editor (assoc state :table-editor nil :function-editor nil :table-uploader nil)
     :set-editor-function (assoc state :function-editor {:function value})
     :set-table-upload-dialog (assoc state :table-uploader {})
+    :show-tasks
+    (if (nil? value)
+      (assoc state :task-viewer nil)
+      (assoc state :task-viewer {:state value}))
     state))
 
 (defn emit

@@ -3,7 +3,7 @@
     [reagent.core :as r]
     [clojure.string :refer [blank?]]
     [bord.state :refer [app-state emit]]
-    [bord.data :refer [fetch-fragment put-meta put-fragment delete-table]]
+    [bord.data :refer [fetch-fragment put-meta put-fragment delete-table count-fragments]]
     [bord.common :refer [find-first-i]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
@@ -162,9 +162,7 @@
 (defn store-meta []
   (reset! store-meta-queue 0)
   (let [data (:meta @editor-cursor)
-        success-callback (fn []
-                           (emit [:set-table data])
-                           (js/console.info "Data saved"))
+        success-callback #(emit [:set-table data])
         error-callback #(js/console.error "Failed to create table!" %)]
     (put-meta {:data data
                :on-complete success-callback

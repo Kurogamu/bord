@@ -4,7 +4,8 @@
     [bord.table-editor :refer [load-table-editor table-editor]]
     [bord.function-editor :refer [load-function-editor function-editor]]
     [bord.table-uploader :refer [table-uploader]]
-    [bord.worker-handler :refer [init-worker]]
+    [bord.task-monitor :refer [task-summary task-view-popup]]
+    [bord.worker-handler :refer [init-workers]]
     [cljs.core.async :refer [go go-loop chan put!]]
     [bord.data :refer [db-init read-all-tables read-all-functions]]
     [reagent.core :as r]
@@ -34,12 +35,12 @@
 ;; -------------------------
 ;; View
 
-(defn topmenu [state]
-  [:div
-   {:class "top-menu"}
-   [:div
-    {:class "center-group"}
-    [:div {:class "title"} "bord"]]])
+(defn topmenu []
+  [:div.top-menu
+   [:div.left-group]
+   [:div.center-group [:div.title "bord"]]
+   [:div.right-group
+    [task-summary]]])
 
 (defn render-cell [{:keys [data]}]
   (if (some? data)
@@ -80,9 +81,8 @@
    {:key (:id function)
     :class "card card-function"
     :on-click #(load-function-editor function)}
-   [:div {:class "card-header"} (:name function)]
-   [:div
-    {:class "card-subheader"}
+   [:div.card-header (:name function)]
+   [:div.card-subheader
     (.toLocaleString (js/Date. (:updated function)))]
    (render-function-preview function)])
 
@@ -90,7 +90,7 @@
   [:div
    {:class "card card-table"
     :on-click #(load-table-editor table)}
-   [:div {:class "card-header"} "Data"]
+   [:div.card-header "Data"]
    (render-table-data table)])
 
 (defn table-collection [table]
@@ -104,58 +104,53 @@
       {:class "table-container-header"
        :on-click #(load-table-editor table)}
       (:name table)]
-     [:div
-      {:class "table-container-subheader"}
+     [:div.table-container-subheader
       (-> table :updated js/Date. .toLocaleString)]
-     [:div
-      {:class "table-container-cards"}
+     [:div.table-container-cards
       (table-card table)
       (doall (map function-card table-functions))
-      [:div
-       {:class "button-container"}
+      [:div.button-container
        [:button
         {:class "btn description-btn"
          :on-click #(load-function-editor {:source (:id table)})}
-        [:div
-         {:class "description-btn-header"}
-         "Add Function"]
-        [:div
-         {:class "description-btn-description"}
+        [:div.description-btn-header "Add Function"]
+        [:div.description-btn-description
          "Apply calculations on table data"]]]]]))
 
 (defn main-container [data]
-  [:div {:class "main-container"}
+  [:div.main-container
    (doall (map table-collection (vals data)))
-   [:div
-    {:class "button-container"}
+   [:div.button-container
     [:button
      {:class "btn add-table-btn"
       :on-click #(load-table-editor :new)}
-     [:div {:class "description-btn-header"} "Add Table"]
-     [:div {:class "description-btn-description"} "Create new table"]]
+     [:div.description-btn-header "Add Table"]
+     [:div.description-btn-description "Create new table"]]
     [:button
      {:class "btn upload-table-btn"
       :on-click load-table-uploader}
-     [:div {:class "description-btn-header"} "Upload Table"]
-     [:div {:class "description-btn-description"} "Create table from file"]]]])
+     [:div.description-btn-header "Upload Table"]
+     [:div.description-btn-description "Create table from file"]]]])
 
-(defn main [state]
-  [:div {:class "main"}
+(defn main []
+  [:div.main
    (if (count (:tables @app-state))
      (main-container (:tables @app-state)))
    (if (:tables-loading @app-state)
-     [:div "loading tables..."])
+     [:div "loading tables..."])])
+
+(defn app-root []
+  [:div.app-root
+   [topmenu]
+   [main]
    (if (some? (:table-editor @app-state))
      [table-editor])
    (if (some? (:function-editor @app-state))
      [function-editor])
    (if (some? (:table-uploader @app-state))
-     [table-uploader])])
-
-(defn app-root [state]
-  [:div {:class "app-root"}
-   [topmenu state]
-   [main state]])
+     [table-uploader])
+   (if (some? (:task-viewer @app-state))
+     [task-view-popup])])
 
 ;; -------------------------
 ;; Handlers
@@ -188,11 +183,12 @@
         on-error #(js/console.error "Failed to init db!" %)]
     (db-init {:on-success on-success :on-error on-error})))
 
-(defn init []
+(defn init-app []
   (js/console.info "Initializing app..")
   (mount-root)
   (init-db)
-  (init-worker)
+  (init-workers)
   (keydown-handler))
 
-(js/document.addEventListener "DOMContentLoaded" init)
+(defn entry-point []
+  (js/document.addEventListener "DOMContentLoaded" init-app))

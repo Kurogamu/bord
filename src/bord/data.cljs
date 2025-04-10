@@ -99,33 +99,30 @@
   (set!
     (.-onsuccess store)
     (fn [event]
-      (let [cursor (.. event -target -result)]
-        (if (some? cursor)
-          (on-complete (.-value cursor))
-          (on-complete nil))))))
+      (if-let [cursor (.. event -target -result)]
+        (on-complete (.-value cursor))
+        (on-complete nil)))))
 
 (defn read-all-cursor [store on-complete]
   (let [result (atom [])]
     (set!
       (.-onsuccess store)
       (fn [event]
-        (let [cursor (.. event -target -result)]
-          (if (some? cursor)
-            (do
-              (swap! result conj (.-value cursor))
-              (.continue cursor))
-            (on-complete @result)))))))
+        (if-let [cursor (.. event -target -result)]
+          (do
+            (swap! result conj (.-value cursor))
+            (.continue cursor))
+          (on-complete @result))))))
 
 (defn delete-all-cursor [store on-complete]
   (set!
     (.-onsuccess store)
     (fn [event]
-      (let [cursor (.. event -target -result)]
-        (if (some? cursor)
-          (do
-            (.delete cursor)
-            (.continue cursor))
-          (on-complete))))))
+      (if-let [cursor (.. event -target -result)]
+        (do
+          (.delete cursor)
+          (.continue cursor))
+        (on-complete)))))
 
 (defn read-table-fragments [{:as args :keys [table-id cursor-callback on-complete on-error]}]
   (let [transaction-params
@@ -140,57 +137,40 @@
             (.openCursor))]
     (set! (.-onsuccess cursor) #(cursor-callback (.. % -target -result)))))
 
-(defn put-meta [{:as args :keys [data on-complete on-error]}]
+(defn put-item [{:as args :keys [data store-name on-complete on-error]}]
   (let [transaction-params
         (-> args
             (select-keys [:on-complete :on-error])
-            (assoc :store-names [meta-store-name] :command "readwrite"))]
+            (assoc :store-names [store-name] :command "readwrite"))]
     (-> (get-transaction transaction-params)
-        (.objectStore meta-store-name)
+        (.objectStore store-name)
         (.put (clj->stored-entry data)))))
 
-(defn put-fragment [{:as args :keys [data on-complete on-error]}]
+(defn put-meta [args]
+  (put-item (assoc args :store-name meta-store-name)))
+
+(defn put-fragment [args]
+  (put-item (assoc args :store-name fragment-store-name)))
+
+(defn put-function [args]
+  (put-item (assoc args :store-name function-store-name)))
+
+(defn read-all-items [store-name on-complete]
   (let [transaction-params
-        (-> args
-            (select-keys [:on-complete :on-error])
-            (assoc :store-names [fragment-store-name]
-                   :command "readwrite"))]
+        {:store-names [store-name]
+         :command "readonly"
+         :on-complete #(js/console.info "Cursor completed")
+         :on-error #(js/console.error "Cursor failed: " %)}]
     (-> (get-transaction transaction-params)
-        (.objectStore fragment-store-name)
-        (.put (clj->stored-entry data)))))
-
-(defn put-function [{:as args :keys [data on-complete on-error]}]
-  (let [transaction-args
-        (-> args
-            (select-keys [:on-complete :on-error])
-            (assoc :store-names [function-store-name]
-                   :command "readwrite"))]
-    (-> (get-transaction transaction-args)
-        (.objectStore function-store-name)
-        (.put (clj->stored-entry data)))))
+        (.objectStore store-name)
+        .openCursor
+        (read-all-cursor #(on-complete (stored->clj %))))))
 
 (defn read-all-tables [on-complete]
-  (let [transaction-params
-        {:store-names [meta-store-name]
-         :command "readonly"
-         :on-complete #(js/console.info "Cursor completed")
-         :on-error #(js/console.error "Cursor failed: " %)}]
-
-    (-> (get-transaction transaction-params)
-        (.objectStore meta-store-name)
-        .openCursor
-        (read-all-cursor #(on-complete (stored->clj %))))))
+  (read-all-items meta-store-name on-complete))
 
 (defn read-all-functions [on-complete]
-  (let [transaction-params
-        {:store-names [function-store-name]
-         :command "readonly"
-         :on-complete #(js/console.info "Cursor completed")
-         :on-error #(js/console.error "Cursor failed: " %)}]
-    (-> (get-transaction transaction-params)
-        (.objectStore function-store-name)
-        .openCursor
-        (read-all-cursor #(on-complete (stored->clj %))))))
+  (read-all-items function-store-name on-complete))
 
 (defn fetch-fragment [{:keys [table-id row-number on-complete]}]
   (let [params (clj->js [table-id row-number])
@@ -207,20 +187,39 @@
         (read-first-cursor
           #(on-complete (some-> % stored-entry->clj))))))
 
-(defn fetch-meta [{:keys [table-id on-complete on-error]}]
+(defn count-fragments [{:keys [table-id on-complete]}]
   (let [transaction-params
-        {:store-names [meta-store-name]
+        {:store-names [fragment-store-name]
          :command "readonly"
-         :on-complete #(js/console.info "Meta fetched")
-         :on-error #(js/console.error "Meta fetch failed: " %)}
+         :on-complete #(js/console.info "Fragments counted")
+         :on-error #(js/console.error "Fragment count failed: " %)}
+        request 
+        (-> (get-transaction transaction-params)
+            (.objectStore fragment-store-name)
+            (.index "table")
+            (.count table-id))]
+    (set! (.-onsuccess request) #(on-complete (.-result request)))))
+
+(defn fetch-item [{:keys [store-name item-key on-complete on-error]}]
+  (let [transaction-params
+        {:store-names [store-name]
+         :command "readonly"
+         :on-complete #(js/console.info "Fetched: " store-name item-key)
+         :on-error #(js/console.error "Fetch failed: " store-name item-key %)}
         request
         (-> (get-transaction transaction-params)
-            (.objectStore meta-store-name)
-            (.get table-id))]
+            (.objectStore store-name)
+            (.get item-key))]
     (set!
       (.-onsuccess request)
       #(on-complete (some-> request .-result stored-entry->clj)))
     (set! (.-onerror request) on-error)))
+
+(defn fetch-meta [args]
+  (fetch-item (assoc args :store-name meta-store-name)))
+
+(defn fetch-function [args]
+  (fetch-item (assoc args :store-name function-store-name)))
 
 (defn delete-table [{:keys [table-id on-complete]}]
   (let [store-names [meta-store-name fragment-store-name]

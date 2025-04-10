@@ -7,9 +7,9 @@
 (defn post-message [msg]
   (js/postMessage (pr-str msg)))
 
-(defn store-data [[url table-id]]
+(defn upload-data [[url table-id]]
   (letfn [(on-progress [progress]
-            (post-message [:table-loading-progress [table-id progress]]))]
+            (post-message [:set-progress progress]))]
     (post-message [:add-loading-table table-id])
     (store-file-data {:url url
                       :table-id table-id
@@ -18,11 +18,10 @@
 (defn message-handler [e]
   (let [[event value] (read-string (.-data e))]
     (case event
-      :store (store-data value)
+      :upload-table (upload-data value)
       (js/console.warning "unrecognized event " event))))
 
-(defn init []
+(defn init-worker []
   (js/self.addEventListener "message" message-handler)
-  (post-message [:worker-init "success"])
-  (db-init {:on-success #(js/console.info "DB for worker loaded")
+  (db-init {:on-success #(post-message [:worker-init "success"])
             :on-error #(js/console.error "DB for worker error " %)}))

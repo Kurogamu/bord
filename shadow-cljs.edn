@@ -9,10 +9,10 @@
                       :modules
                       {:shared {:entries []}
                        :app
-                       {:init-fn bord.core/init
+                       {:init-fn bord.core/entry-point
                         :depends-on #{:shared}}
                        :worker
-                       {:init-fn bord.worker/init
+                       {:init-fn bord.worker/init-worker
                         :depends-on #{:shared}
                         :web-worker true}}
                       :js-options {:js-provider :external :external-index "target/index.js"}

@@ -25,10 +25,18 @@
     :set-data (assoc-in state [:table-uploader :result] value)
     :set-preview (assoc-in state [:table-uploader :preview] value)
     :set-meta (assoc-in state [:table-uploader :meta] value)
+    :set-column-type
+    (let [[id select] value]
+      (assoc-in state
+                [:table-uploader :meta :columns id :type] select))
     state))
 
 ;; -------------------------
 ;; Task
+
+(defn close-modal []
+  (animation-trigger "slide-out" emit [:close-editor nil])
+  (emit [:init-closing nil] handler))
 
 (defn select-file [event]
   (let [file-object (-> event .-target .-files first)]
@@ -43,13 +51,10 @@
         table-meta (:meta @modal-cursor)]
     (emit [:set-uploading true] handler)
     (put-meta {:data table-meta
-               :on-complete #(js/console.info "Data saved")
+               :on-complete #(emit [:set-table table-meta])
                :on-error #(js/console.error "Failed to create table!" %)})
-    (worker-emit [:store [url (:id table-meta)]])))
-
-(defn close-modal []
-  (animation-trigger "slide-out" emit [:close-editor nil])
-  (emit [:init-closing nil] handler))
+    (worker-emit [:upload-table [url (:id table-meta)]]))
+  (close-modal))
 
 ;; -------------------------
 ;; View
@@ -69,21 +74,26 @@
 (defn column-description [[column-id column]]
   [:div
    {:key column-id
-    :class "description-field"}
-   [:span.label (:name column)]
-   [:span
-    (case (:type column)
-      :number "Number"
-      :boolean "Boolean"
-      "String")]])
+    :class "column-editor"}
+   [:div [:span.label (:name column)]]
+   [:div.input-wrapper
+    [:select
+     {:class "select"
+      :value (get-in @modal-cursor [:meta :columns column-id :type])
+      :on-change
+      #(emit [:set-column-type [column-id (.. % -target -value)]] handler)}
+     [:option {:value :string} "Text"]
+     [:option {:value :boolean} "Boolean"]
+     [:option {:value :number} "Number"]]]])
 
 (defn column-section []
   [:div.modal-section
    [:h3 "Columns"]
    [:div.description
-    (doall (map
-             column-description
-             (get-in @modal-cursor [:meta :columns])))]])
+    (doall
+      (map
+        column-description
+        (get-in @modal-cursor [:meta :columns])))]])
 
 (defn preview-section [table-meta]
   [:div.modal-section
@@ -95,7 +105,8 @@
         (if (blank? (:name column))
           [:th {:key column-id :class "blank"} "Blank"]
           [:th {:key column-id} (:name column)]))]
-     (for [[row-index row-data] (map-indexed vector (:data-preview table-meta))]
+     (for [[row-index row-data]
+           (map-indexed vector (:data-preview table-meta))]
        [:tr
         {:key row-index}
         (for [column-id (:sort-columns table-meta)]
