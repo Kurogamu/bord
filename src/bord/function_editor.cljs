@@ -3,8 +3,13 @@
     [reagent.core :as r]
     [clojure.string :refer [blank?]]
     [bord.state :refer [app-state emit function-outputs]]
-    [bord.common :refer [find-first-i remove-i move-i remove-match swap-i animation-trigger]]
-    [bord.data :refer [put-function delete-function fetch-fragment]]
+    [bord.common :refer [find-first-i
+                         remove-i
+                         move-i
+                         remove-match
+                         swap-i
+                         animation-trigger]]
+    [bord.data :refer [put-function delete-function read-row-fragment]]
     [bord.function :refer [all-operations
                            function-types
                            param-type
@@ -147,10 +152,10 @@
        :on-error error-callback})))
 
 (defn load-fragment [row-number]
-  (fetch-fragment {:table-id (:id @editor-cursor)
-                   :row-number row-number
-                   :limit 100
-                   :on-complete #(emit [:set-fragment %] handler)}))
+  (read-row-fragment {:object-id (:id @editor-cursor)
+                      :row-number row-number
+                      :limit 100
+                      :on-success #(emit [:set-fragment %] handler)}))
 
 (defn load-function-editor [function]
   (if (contains? function :id)

@@ -45,7 +45,7 @@
         #(zipmap (map :id columns) (str/split % #","))
         preview-rows))))
 
-(defn create-fragment [{:as args :keys [table-id first-row data offset]}]
+(defn create-fragment [{:as args :keys [object-id first-row data offset]}]
   (assoc args
          :id (js/crypto.randomUUID)
          :last-row (+ first-row (count data))))
@@ -59,7 +59,7 @@
             (if (< 0 @row-counter) data-rows (rest data-rows)))
           fragment
           (create-fragment
-            {:table-id (:id table-meta)
+            {:object-id (:id table-meta)
              :first-row @row-counter
              :offset @fragment-counter
              :data processed})]

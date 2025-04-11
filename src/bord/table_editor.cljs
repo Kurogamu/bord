@@ -3,7 +3,7 @@
     [reagent.core :as r]
     [clojure.string :refer [blank?]]
     [bord.state :refer [app-state emit]]
-    [bord.data :refer [fetch-fragment put-meta put-fragment delete-table count-fragments]]
+    [bord.data :as data]
     [bord.common :refer [find-first-i]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
@@ -24,7 +24,7 @@
 
 (defn init-fragment-data [table-id]
   {:id (js/crypto.randomUUID)
-   :table-id table-id
+   :object-id table-id
    :first-row 0
    :last-row 0
    :offset 0
@@ -130,9 +130,9 @@
   (let [new-fragment (init-fragment-data (get-in @editor-cursor [:meta :id]))
         success-callback #(emit [:set-fragment new-fragment] handler)
         error-callback #(js/console.error "Failed to create fragment" %)]
-    (put-fragment {:data new-fragment
-                   :on-complete success-callback
-                   :on-error error-callback})))
+    (data/put-fragment {:data new-fragment
+                        :on-complete success-callback
+                        :on-error error-callback})))
 
 (defn init-table [on-complete]
   (let [new-table (init-table-data)
@@ -140,7 +140,7 @@
                            (emit [:set-editor-table new-table])
                            (on-complete))
         error-callback #(js/console.error "Failed to create table!" %)]
-    (put-meta {:data new-table
+    (data/put-meta {:data new-table
                :on-complete success-callback
                :on-error error-callback})))
 
@@ -149,9 +149,9 @@
 
 (defn load-existing-table [table]
   (emit [:open-editor-table table])
-  (fetch-fragment {:table-id (:id table)
-                   :row-number 0
-                   :on-complete #(emit [:set-fragment %] handler)}))
+  (data/read-row-fragment {:object-id (:id table)
+                      :row-number 0
+                      :on-success #(emit [:set-fragment %] handler)}))
 
 (defn load-table-editor [table]
   (if (= table :new)
@@ -165,7 +165,7 @@
   (let [data (:meta @editor-cursor)
         success-callback #(emit [:set-table data])
         error-callback #(js/console.error "Failed to create table!" %)]
-    (put-meta {:data data
+    (data/put-meta {:data data
                :on-complete success-callback
                :on-error error-callback})))
 
@@ -188,7 +188,7 @@
   (reset! store-fragment-queue 0)
   (let [success-callback #(js/console.info "Fragment saved")
         error-callback #(js/console.error "Failed to create table!" %)]
-    (put-fragment {:data (:fragment @editor-cursor)
+    (data/put-fragment {:data (:fragment @editor-cursor)
                    :on-complete success-callback
                    :on-error error-callback})))
 
@@ -222,8 +222,8 @@
 (defn delete []
   (let [table (:meta @editor-cursor)
         delete-callback #(emit [:delete-table table])]
-    (delete-table {:table-id (:id table)
-                   :on-complete delete-callback})
+    (data/delete-table {:table-id (:id table)
+                        :on-complete delete-callback})
     (close-modal)))
 
 ;; -------------------------
