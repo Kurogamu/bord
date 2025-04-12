@@ -131,7 +131,7 @@
         success-callback #(emit [:set-fragment new-fragment] handler)
         error-callback #(js/console.error "Failed to create fragment" %)]
     (data/put-fragment {:data new-fragment
-                        :on-complete success-callback
+                        :on-success success-callback
                         :on-error error-callback})))
 
 (defn init-table [on-complete]
@@ -141,8 +141,8 @@
                            (on-complete))
         error-callback #(js/console.error "Failed to create table!" %)]
     (data/put-meta {:data new-table
-               :on-complete success-callback
-               :on-error error-callback})))
+                    :on-success success-callback
+                    :on-error error-callback})))
 
 (defn setup-new-table []
   (init-table init-fragment))
@@ -166,7 +166,7 @@
         success-callback #(emit [:set-table data])
         error-callback #(js/console.error "Failed to create table!" %)]
     (data/put-meta {:data data
-               :on-complete success-callback
+               :on-success success-callback
                :on-error error-callback})))
 
 (defn debounce-store-meta []
@@ -189,7 +189,7 @@
   (let [success-callback #(js/console.info "Fragment saved")
         error-callback #(js/console.error "Failed to create table!" %)]
     (data/put-fragment {:data (:fragment @editor-cursor)
-                   :on-complete success-callback
+                   :on-success success-callback
                    :on-error error-callback})))
 
 (defn debounce-store-fragment []

@@ -1,6 +1,6 @@
 (ns bord.file
   (:require
-    [bord.data :refer [fetch-meta put-fragment]]
+    [bord.data :refer [fetch-meta put-meta put-fragment]]
     [bord.fetch :refer [fetch-read-lines]]
     [clojure.string :as str]))
 
@@ -50,9 +50,11 @@
          :id (js/crypto.randomUUID)
          :last-row (+ first-row (count data))))
 
-(defn store-rows [data-rows table-meta row-counter fragment-counter on-progress]
+(defn store-rows [data-rows table-meta row-counter fragment-counter report]
   (if (nil? data-rows)
-    (on-progress 1) ; update meta
+    (put-meta
+      {:data (assoc table-meta :count @row-counter)
+       :on-success #(report [:set-result {:partial false}])})
     (let [processed
           (map
             #(zipmap (:sort-columns table-meta) (str/split % #","))
@@ -67,20 +69,20 @@
       (swap! fragment-counter inc)
       (put-fragment
         {:data fragment
-         :on-complete
+         :on-success
          #(js/console.info "Pushed fragment " (clj->js fragment))
          :on-error
          #(js/console.error "Fragment failed " (clj->js fragment))}))))
 
-(defn store-file-data [{:keys [url table-id on-progress]}]
+(defn store-file-data [{:keys [url table-id report]}]
   (let [row-counter (atom 0)
         fragment-counter (atom 0)]
     (fetch-meta
       {:table-id table-id
        :on-complete
        (fn [table-meta]
-         (on-progress 0)
+         (report [:set-progress 0])
          (fetch-read-lines 
            url
-           #(store-rows % table-meta row-counter fragment-counter on-progress)))
+           #(store-rows % table-meta row-counter fragment-counter report)))
        :on-error #(js/console.error "fetch meta failed" %)})))

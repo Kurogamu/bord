@@ -15,7 +15,7 @@
                            param-type
                            result-type
                            run-function]]
-    [bord.function-process :refer [trigger-process]]
+    [bord.function-process-handler :refer [trigger-process]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
 
@@ -148,7 +148,7 @@
         error-callback #(js/console.error "Failed to create function" %)]
     (put-function
       {:data new-function
-       :on-complete success-callback
+       :on-success success-callback
        :on-error error-callback})))
 
 (defn load-fragment [row-number]
@@ -173,7 +173,7 @@
         error-callback #(js/console.error "Failed to store data: " %)]
     (put-function
       {:data data
-       :on-complete success-callback
+       :on-success success-callback
        :on-error error-callback})))
 
 (defn debounce-store-function []
@@ -211,6 +211,7 @@
 (defn delete []
   (let [data @editor-cursor
         delete-callback #(emit [:delete-function data])]
+    (emit [:set-function-state [(:id data) :deleting]])
     (delete-function {:function-id (:id data)
                       :on-complete delete-callback})
     (close-modal)))

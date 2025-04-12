@@ -9,13 +9,15 @@
   {:tables {}
    :table-editor nil
    :function-editor nil
+   :functions {}
    :table-uploader nil
    :tables-loading false
    :functions-loading false
    :tasks {:running {}
            :queued []
            :completed []
-           :failed []}
+           :failed []
+           :partial {}}
    :task-viewer nil})
 
 (defonce app-state (r/atom default-state))
@@ -39,6 +41,8 @@
     (if (nil? value)
       (assoc state :task-viewer nil)
       (assoc state :task-viewer {:state value}))
+    :set-function-state
+    (assoc state [:functions (first value) :state] (second value))
     state))
 
 (defn emit

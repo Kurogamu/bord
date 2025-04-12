@@ -5,22 +5,19 @@
     [bord.function-process :refer [process-fragments]]
     [clojure.edn :refer [read-string]]))
 
-(defn post-message [msg]
+(defn- post-message [msg]
   (js/postMessage (pr-str msg)))
-
-(defn report-progress [progress]
-  (post-message [:set-progress progress]))
 
 (defn upload-data [[url table-id]]
   (store-file-data {:url url
                     :table-id table-id
-                    :on-progress report-progress}))
+                    :report post-message}))
 
 (defn process-function [[function-id offset limit]]
   (process-fragments {:function-id function-id
                       :fragment-offset offset
                       :limit limit
-                      :on-progress report-progress}))
+                      :report post-message}))
 
 (defn message-handler [e]
   (let [[event value] (read-string (.-data e))]

@@ -1,7 +1,6 @@
 (ns bord.function
   (:require
-    [bord.common :refer [read-number read-boolean]]
-    [reagent.core :as r]))
+    [bord.common :refer [read-number read-boolean]]))
 
 (def const-operations
   {:number-constant {:label "Numeric Constant"
@@ -76,16 +75,21 @@
             :description "Squash all rows into one"
             :operations (merge reduce-operations const-operations)}})
 
-(defn run-operation [data operation]
+(defn cast-params [params param-type]
+  (map
+    (fn [param]
+      (case param-type
+        :source-boolean (read-boolean param)
+        :source-number (read-number param)
+        param))
+    params))
+
+(defn run-operation [operation data-sets]
   (let [operand (keyword (:operand operation))
-        params (map #(get data %) (:params operation))
-        values (map
-                 (fn [param]
-                   (case (param-type operand)
-                     :source-boolean (read-boolean param)
-                     :source-number (read-number param)
-                     param))
-                 params)]
+        params (mapcat
+                 (fn [data] (map #(get data %) (:params operation)))
+                 data-sets)
+        values (cast-params params (param-type operand))]
     (case operand
       :number-constant (read-number (:params operation))
       :string-constant (:params operation)
@@ -102,40 +106,41 @@
       :concat (apply conj values)
       nil)))
 
-(defn process-row [input-row operations]
-  (reduce 
-    (fn [results [operation-id operation]]
-      (assoc results operation-id (run-operation results operation)))
+(defn process-row [operations input-row & additional-inputs]
+  (reduce
+    (fn [row-values [operation-id operation]]
+      (assoc
+        row-values
+        operation-id
+        (run-operation operation (cons row-values additional-inputs))))
     input-row
     operations))
 
 (defn run-map [data function]
-  (mapv 
+  (mapv
     (fn [data-row]
-      (-> data-row
-          (process-row (:operations function))
+      (-> (process-row (:operations function) data-row)
           (select-keys (:outputs function))))
     data))
 
 (defn run-filter [data function]
   (->> data
-       (mapv #(process-row % (:operations function)))
+       (mapv #(process-row (:operations function) %))
        (filter #(get % (last (:sort-operations function))))
        (mapv #(select-keys % (:outputs function)))))
 
 (defn run-reduce [data function]
-  (let [operations (reduce 
-                     (fn [result [id op]]
-                       (assoc
-                         result
-                         id (update op :params #(cons id %))))
-                     {}
-                     (:operations function))
-        init-values (update-vals (:operations function) (fn [op] 0))]
+  (let [operations-with-self
+        (update-vals
+          (:operations function)
+          (fn [op] (update op :params conj (:id op))))]
     (->
       (reduce
-        #(-> (merge %1 %2) (process-row operations))
-        init-values
+        (fn [result-row input-row]
+          (select-keys 
+            (process-row operations-with-self input-row result-row)
+            (keys (:operations function))))
+        {}
         data)
       (select-keys (:outputs function))
       (vector))))

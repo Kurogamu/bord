@@ -90,8 +90,13 @@
       (.-onerror db-request)
       on-error)))
 
+(defn- set-error-action [store callback]
+  (set! (.-onerror store) callback)
+  store)
+
 (defn- set-success-action [store callback]
-  (set! (.-onsuccess store) callback))
+  (set! (.-onsuccess store) callback)
+  store)
 
 (defn- read-first-cursor [event on-complete]
   (on-complete
@@ -102,7 +107,7 @@
     (do
       (swap! result conj (.-value cursor))
       (.continue cursor))
-    (on-complete @result)))
+    (on-complete (stored->clj @result))))
 
 (defn- delete-all-cursor [event on-complete]
   (if-let [cursor (.. event -target -result)]
@@ -153,14 +158,14 @@
       cursor-range
       #(iterative-cursor % cursor-callback))))
 
-(defn- put-item [{:as args :keys [data store-name on-complete on-error]}]
-  (let [transaction-params
-        (-> args
-            (select-keys [:on-complete :on-error])
-            (assoc :store-names [store-name] :command "readwrite"))]
+(defn- put-item [{:as args :keys [data store-name on-success on-error]}]
+  (let [transaction-params {:store-names [store-name]
+                            :command "readwrite"}]
     (-> (get-transaction transaction-params)
         (.objectStore store-name)
-        (.put (clj->stored-entry data)))))
+        (.put (clj->stored-entry data))
+        (set-error-action on-error)
+        (set-success-action on-success))))
 
 (defn put-meta [args]
   (put-item (assoc args :store-name meta-store-name)))
@@ -189,7 +194,7 @@
 (defn read-all-functions [on-complete]
   (read-all-items function-store-name on-complete))
 
-(defn count-fragments [{:keys [object-id on-complete]}]
+(defn count-fragments [{:keys [object-id on-success]}]
   (let [transaction-params
         {:store-names [fragment-store-name]
          :command "readonly"
@@ -200,7 +205,7 @@
             (.objectStore fragment-store-name)
             (.index "object")
             (.count object-id))]
-    (set! (.-onsuccess request) #(on-complete (.-result request)))))
+    (set! (.-onsuccess request) #(on-success (.-result request)))))
 
 (defn- fetch-object [{:keys [store-name object-key on-complete on-error]}]
   (let [transaction-params
@@ -247,19 +252,16 @@
                   :on-complete on-complete}))
 
 (defn delete-function [{:keys [function-id on-complete]}]
-  (delete-object {:store-name delete-object
+  (delete-object {:store-name function-store-name
                   :object-key function-id
                   :on-complete on-complete}))
 
-(defn delete-fragments [{:keys [object-id on-complete]}]
+(defn delete-fragments [{:keys [object-id on-success]}]
   (let [store-names [fragment-store-name]
-        transaction-params
-        {:store-names store-names
-         :command "readwrite"
-         :on-complete on-complete
-         :on-error #(js/console.error "Data deletion failed: " %)}]
+        transaction-params {:store-names store-names
+                            :command "readwrite"}]
     (doto (get-transaction transaction-params)
       (-> (.objectStore fragment-store-name)
           (.index "object")
           (.openCursor (.only (idb-key-range) object-id))
-          (set-success-action #(delete-all-cursor % on-complete))))))
+          (set-success-action #(delete-all-cursor % on-success))))))

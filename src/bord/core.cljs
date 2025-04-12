@@ -84,7 +84,10 @@
    [:div.card-header (:name function)]
    [:div.card-subheader
     (.toLocaleString (js/Date. (:updated function)))]
-   (render-function-preview function)])
+   (case (:state function)
+     :deleting [:div.deleting "Deleting function..."]
+     :processing [:div.processing "Processing function..."]
+     (render-function-preview function))])
 
 (defn table-card [table]
   [:div
@@ -105,7 +108,8 @@
        :on-click #(load-table-editor table)}
       (:name table)]
      [:div.table-container-subheader
-      (-> table :updated js/Date. .toLocaleString)]
+      (-> table :updated js/Date. .toLocaleString)
+      (str (:count table) "rows")]
      [:div.table-container-cards
       (table-card table)
       (doall (map function-card table-functions))

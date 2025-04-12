@@ -13,15 +13,27 @@
     (assoc-in state [:tasks :running worker-id] {:msg value})
     :queue-task
     (update-in state [:tasks :queued] conj value)
+    :dequeue-first
+    (update-in state [:tasks :queued] rest)
     :set-progress
-    (if (< value 1)
-      (assoc-in state [:tasks :running worker-id :progress] value)
-      (-> state
-          (assoc-in [:tasks :running worker-id :progress] 1)
-          (update-in [:tasks :completed]
-                     conj (get-in state [:tasks :running worker-id]))
-          (update-in [:tasks :running] dissoc worker-id)))
+    (assoc-in state [:tasks :running worker-id :progress] value)
+    :set-result
+    (-> state
+      (update-in
+        [:tasks :completed]
+        conj 
+        (assoc (get-in state [:tasks :running worker-id]) :progress 1))
+      (update-in [:tasks :running] dissoc worker-id))
+    :set-gather
+    (assoc-in state [:tasks :on-result (first value)] (second value))
     state))
+
+(defn set-result-callback [target on-result]
+  (emit [:set-gather [target on-result] nil] state-handler))
+
+(defn process-results [value]
+  (if-let [on-result (get-in @app-state [:tasks :on-result (:target value)])]
+    (on-result value)))
 
 (defn- available-workers []
   (clojure.set/difference
@@ -35,11 +47,23 @@
       (.postMessage (get @workers worker-id) (pr-str msg)))
     (emit [:queue-task msg nil] state-handler)))
 
+(defn dequeue []
+  (when-let [queued (-> @app-state :tasks :queued first)]
+    (emit [:dequeue-first nil nil] state-handler)
+    (worker-emit queued)))
+
 (defn- message-handler [e worker-id]
-  (let [[event value] (read-string (.-data e))]
-    (if (= event :worker-init)
-      (js/console.info (str "registered worker " worker-id ": " value)))
-    (emit [event value worker-id] state-handler)))
+  (let [[event value] (read-string (.-data e))
+        default #(emit [event value worker-id] state-handler)]
+    (case event
+      :worker-init
+      (js/console.info (str "registered worker " worker-id ": " value))
+      :set-result
+      (do
+        (default)
+        (dequeue)
+        (process-results value))
+      (default))))
 
 (defn init-workers []
   (doall

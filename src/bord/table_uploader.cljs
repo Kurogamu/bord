@@ -2,7 +2,7 @@
   (:require
     [bord.state :refer [app-state emit]]
     [bord.common :refer [animation-trigger]]
-    [bord.worker-handler :refer [worker-emit]]
+    [bord.worker-handler :refer [worker-emit set-result-callback]]
     [bord.data :refer [put-meta]]
     [bord.fetch :refer [fetch-read-lines]]
     [bord.file :refer [infer-meta]]
@@ -51,8 +51,11 @@
         table-meta (:meta @modal-cursor)]
     (emit [:set-uploading true] handler)
     (put-meta {:data table-meta
-               :on-complete #(emit [:set-table table-meta])
+               :on-success #(emit [:set-table table-meta])
                :on-error #(js/console.error "Failed to create table!" %)})
+    (set-result-callback
+      (:id table-meta)
+      (emit [:set-uploading false] handler))
     (worker-emit [:upload-table [url (:id table-meta)]]))
   (close-modal))
 
@@ -123,6 +126,11 @@
     [:div.modal-title "Upload Table"]
     [:div
      {:class "modal-menu btn-group"}
+     [:button
+      {:class "btn"
+       :on-click start-upload
+       :disabled (not (:selected @modal-cursor))}
+      "upload file"]
      [:button {:class "btn close-btn" :on-click close-modal} "Cancel"]]]
    [:div.modal-body
     [:div.modal-section
@@ -139,9 +147,4 @@
       [column-section])
     (if (:meta @modal-cursor)
       (preview-section (:meta @modal-cursor)))
-    [:div.modal-section
-     [:h3 "Upload"]
-     [:button
-      {:on-click start-upload
-       :disabled (not (:selected @modal-cursor))}
-      "upload file"]]]])
+    ]])
