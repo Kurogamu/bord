@@ -1,5 +1,6 @@
 (ns bord.table-uploader
   (:require
+    [bord.table-view :refer [table-component]]
     [bord.state :refer [app-state emit]]
     [bord.common :refer [animation-trigger]]
     [bord.worker-handler :refer [worker-emit set-result-callback]]
@@ -99,29 +100,18 @@
         (get-in @modal-cursor [:meta :columns])))]])
 
 (defn preview-section [table-meta]
-  [:div.modal-section
+  [:div
+   {:class "modal-section data-preview"}
    [:h3 "Preview"]
-   [:div.table-wrapper
-    [:table
-     [:tr
-      (for [[column-id column] (:columns table-meta)]
-        (if (blank? (:name column))
-          [:th {:key column-id :class "blank"} "Blank"]
-          [:th {:key column-id} (:name column)]))]
-     (for [[row-index row-data]
-           (map-indexed vector (:data-preview table-meta))]
-       [:tr
-        {:key row-index}
-        (for [column-id (:sort-columns table-meta)]
-          [:td
-           {:key (str column-id row-index)}
-           (str (get row-data column-id))])])]]])
+   [table-component {:sort-columns (:sort-columns table-meta)
+                     :columns (:columns table-meta)
+                     :data-rows (:data-preview table-meta)}]])
 
 (defn table-uploader []
   [:div
    {:class (if (:closing (:table-uploader @app-state))
-             "modal modal-editor modal-editor-closing"
-             "modal modal-editor")}
+             "modal modal-closing"
+             "modal")}
    [:div.modal-header
     [:div.modal-title "Upload Table"]
     [:div
@@ -146,5 +136,4 @@
     (if (:selected @modal-cursor)
       [column-section])
     (if (:meta @modal-cursor)
-      (preview-section (:meta @modal-cursor)))
-    ]])
+      (preview-section (:meta @modal-cursor)))]])

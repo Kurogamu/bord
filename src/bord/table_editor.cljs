@@ -2,12 +2,12 @@
   (:require
     [reagent.core :as r]
     [clojure.string :refer [blank?]]
+    [bord.table-view :refer [table-component]]
     [bord.state :refer [app-state emit]]
     [bord.data :as data]
     [bord.common :refer [find-first-i]]
     [cljs.core.async :refer [go timeout]]
     ["react" :as react]))
-
 
 ;; Delay after last interaction before saving
 (def debounce-timeout 2000)
@@ -40,7 +40,6 @@
      :sort-columns [(:id column)]
      :data-preview []
      :count 1}))
-
 
 ;; -------------------------
 ;; Update
@@ -121,6 +120,7 @@
           (update-in (meta-path :count) inc)
           update-data-preview)
       :init-closing (assoc-in state [:table-editor :closing] true)
+      :set-mode (assoc-in state [:table-editor :mode] value)
       state)))
 
 ;; -------------------------
@@ -228,6 +228,7 @@
 
 ;; -------------------------
 ;; View
+
 (defn editor-name []
   [:div
    {:class "modal-section name-editor"}
@@ -246,7 +247,7 @@
   [:div
    {:key column-id :class "column-editor"}
    [:div
-    {:class "input-wrapper"}
+    {:class "input-wrapper column-label"}
     [:input
      {:class "input"
       :type "text"
@@ -256,7 +257,7 @@
       :on-change #(emit-edit-meta
                     [:set-column-name [column-id (.. % -target -value)]])}]]
    [:div
-    {:class "input-wrapper"}
+    {:class "input-wrapper column-type"}
     [:select
      {:class "select"
       :value (get-in @editor-cursor [:meta :columns column-id :type])
@@ -307,63 +308,63 @@
                                  (emit [:move-active-cell :next] handler)))
                        nil))}]))
 
-(defn editor-cell [cell-key data]
-  (let [activate-cell #(emit [:set-active-cell cell-key] handler)]
+(defn editor-cell [{:keys [row-index column-id data]}]
+  (let [cell-key [row-index column-id]
+        activate-cell #(emit [:set-active-cell cell-key] handler)]
     (cond
       (= cell-key (:active-cell @editor-cursor))
-      [:td {:key cell-key :class "active"}
+      [:td.active
        (cell-editor
          (get-in @editor-cursor [:meta :columns (second cell-key) :type]))]
 
       (blank? data)
-        [:td {:key cell-key :class "blank" :on-click activate-cell} "Blank"]
+      [:td {:class "blank" :on-click activate-cell} "Blank"]
 
-      :else [:td {:key cell-key :on-click activate-cell} (str data)])))
+      :else
+      [:td {:on-click activate-cell} (str data)])))
 
-(defn editor-data []
-  [:div {:class "modal-section table-editor"}
+(defn settings []
+  [:div
+   {:class "modal-body modal-editor"}
+   [:div
+    {:class "table-editor"}
+    [editor-name]
+    [editor-columns]]])
+
+(defn data []
+  [:div
+   {:class "modal-body modal-data"}
    [:h3 "Data"]
-   [:div {:class "table-wrapper"}
-    [:table
-     [:tr
-      (doall
-        (for [column-id
-              (get-in @editor-cursor [:meta :sort-columns])]
-          (let [name
-                (get-in @editor-cursor [:meta :columns column-id :name])]
-            (if (blank? name)
-              [:th {:key column-id :class "blank"} "Blank"]
-              [:th {:key column-id} name]))))]
-     (doall
-       (for [[row-index row-data]
-             (map-indexed vector (get-in @editor-cursor [:fragment :data]))]
-         [:tr {:key row-index}
-          (doall
-            (for [column-id
-                  (get-in @editor-cursor [:meta :sort-columns])]
-              (editor-cell
-                [row-index column-id]
-                (get row-data column-id))))]))]
-    [:button
-     {:class "btn add-row-btn"
-      :on-click #(emit [:add-row nil] handler)}
-     "Add row"]]])
+   
+   [table-component
+    {:sort-columns (get-in @editor-cursor [:meta :sort-columns])
+     :columns (get-in @editor-cursor [:meta :columns])
+     :data-rows (take
+                  (/ 1000 (count (get-in @editor-cursor [:meta :sort-columns])))
+                  (get-in @editor-cursor [:fragment :data]))
+     :cell-component editor-cell}]
+   [:button
+    {:class "btn add-row-btn"
+     :on-click #(emit [:add-row nil] handler)}
+    "Add row"]])
 
 (defn table-editor []
   [:div
    {:class (if (:closing @editor-cursor)
-             "modal modal-editor modal-editor-closing"
-             "modal modal-editor")}
+             "modal modal-closing"
+             "modal ")}
    [:div
     {:class "modal-header"}
-    [:div {:class "modal-title"} "Table Editor"]
+    [:div {:class "modal-title"} "Table"]
     [:div {:class "modal-menu btn-group"}
-    [:button {:class "btn btn-delete" :on-click delete} "Delete"]
-    [:button {:class "btn btn-close" :on-click close-table-editor} "Close"]]]
-   [:div
-    {:class "modal-body"}
-    [:div
-     {:class "table-editor"}
-     [editor-name]
-     [editor-columns]
-     [editor-data]]]])
+     [:button
+      {:class "btn setup-btn" :on-click #(emit [:set-mode :setup] handler)}
+      "Setup"]
+     [:button
+      {:class "btn data-btn" :on-click #(emit [:set-mode :data] handler)}
+      "Data"]
+     [:button {:class "btn btn-delete" :on-click delete} "Delete"]
+     [:button {:class "btn btn-close" :on-click close-table-editor} "Close"]]]
+   (if (= :data (get-in @app-state [:table-editor :mode]))
+     [data]
+     [settings])])

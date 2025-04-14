@@ -2,6 +2,7 @@
   (:require
     [reagent.core :as r]
     [clojure.string :refer [blank?]]
+    [bord.table-view :refer [table-component]]
     [bord.state :refer [app-state emit function-outputs]]
     [bord.common :refer [find-first-i
                          remove-i
@@ -510,18 +511,6 @@
           [:div {:class "label"} "Selected"]]
          [:div {:class "blank"} "No outputs selected"])]]))
 
-(defn editor-preview-table []
-  [:table
-   [:tr
-    (doall
-      (for [output (function-outputs @editor-cursor)]
-        [:th {:key (:id output)} (:name output)]))]
-   (for [[index result-row]
-         (map-indexed vector (:preview @editor-cursor))]
-     [:tr {:key index}
-      (for [[id value] result-row]
-        [:td {:key id} (or (str value) "Blank")])])])
-
 (defn editor-preview []
   [:div
    {:class "modal-section preview"}
@@ -529,11 +518,14 @@
    (if (or
          (seq (:outputs @editor-cursor))
          (seq (:preview @editor-cursor)))
-     [:div {:class "table-wrapper"} (editor-preview-table)]
+     [table-component {:sort-columns (:outputs @editor-cursor)
+                       :columns (function-outputs @app-state @editor-cursor)
+                       :data-rows (:preview @editor-cursor)}]
      [:div "No data available"])])
 
 (defn editor []
-  [:div.modal-body
+  [:div
+   {:class "modal-body modal-editor"}
    [editor-name]
    [editor-type]
    [editor-operations]
@@ -541,33 +533,33 @@
    [editor-preview]])
 
 (defn viewer []
-  [:div.viewer
-   [:table
-    [:tr
-     (doall
-       (for [output (function-outputs @editor-cursor)]
-         [:th {:key (:id output)} (:name output)]))]
-    (for [[index result-row]
-          (map-indexed vector
-                       (take
-                         100
-                         (get-in @app-state [:function-editor :fragment :data])))]
-      [:tr {:key index}
-       (for [[id value] result-row]
-         [:td {:key id} (or (str value) "Blank")])])]])
+  [:div
+   {:class "modal-body modal-data"}
+   [:h3 "Data"]
+   (let [data-rows
+         (take
+           100
+           (get-in @app-state [:function-editor :fragment :data]))]
+     [table-component {:sort-columns (:outputs @editor-cursor)
+                       :columns (function-outputs @app-state @editor-cursor)
+                       :data-rows data-rows}])])
 
 (defn function-editor []
   [:div
    {:class (if (:closing (:function-editor @app-state))
-             "modal modal-editor modal-editor-closing"
-             "modal modal-editor")}
+             "modal modal-closing"
+             "modal")}
    [:div
     {:class "modal-header"}
     [:div {:class "modal-title"} "Function"]
     [:div
      {:class "modal-menu btn-group"}
-     [:button {:class "btn edit-btn" :on-click #(emit [:set-mode :edit] handler)} "Edit"]
-     [:button {:class "btn view-btn" :on-click #(emit [:set-mode :view] handler)} "View"]
+     [:button
+      {:class "btn edit-btn" :on-click #(emit [:set-mode :edit] handler)}
+      "Edit"]
+     [:button
+      {:class "btn view-btn" :on-click #(emit [:set-mode :view] handler)}
+      "View"]
      [:button {:class "btn process-btn" :on-click process} "Run"]
      [:button {:class "btn delete-btn" :on-click delete} "Delete"]
      [:button {:class "btn close-btn" :on-click close-editor} "Close"]]]

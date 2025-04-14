@@ -52,8 +52,8 @@
 ;; ----------------
 ;; Helpers
 
-(defn function-outputs [function]
-  (let [data (merge
-               (get-in @app-state [:tables (:source function) :columns])
-               (:operations function))]
-    (map #(get data %) (:outputs function))))
+(defn function-outputs [state function]
+  (let [outputs (merge
+                  (get-in state [:tables (:source function) :columns])
+                  (:operations function))]
+    (select-keys outputs (:outputs function))))

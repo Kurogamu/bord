@@ -1,5 +1,6 @@
 (ns bord.core
   (:require
+    [bord.table-view :refer [table-component]]
     [bord.state :refer [app-state emit function-outputs]]
     [bord.table-editor :refer [load-table-editor table-editor]]
     [bord.function-editor :refer [load-function-editor function-editor]]
@@ -42,39 +43,18 @@
    [:div.right-group
     [task-summary]]])
 
-(defn render-cell [{:keys [data]}]
-  (if (some? data)
-    [:td (str data)]
-    [:td {:class "blank"} "Blank"]))
-
 (defn render-table-data [table]
-  [:div {:class "card-content table"}
-    [:table
-     [:tr
-      (for [column-id (:sort-columns table)]
-        [:th
-         {:key column-id}
-         (-> table (get-in [:columns column-id :name]) str)])]
-     (for [[row-index row-data]
-           (map-indexed vector (:data-preview table))]
-       [:tr
-        {:key row-index}
-        (for [column-id (:sort-columns table)]
-         [render-cell
-          {:key column-id :data (get row-data column-id)}])])]])
+  [:div {:class "card-content"}
+   [table-component {:sort-columns (:sort-columns table)
+                     :columns (:columns table)
+                     :data-rows (:data-preview table)}]])
+
 
 (defn render-function-preview [function]
-  [:div {:class "card-content table"}
-   [:table
-    [:tr
-     (for [output (function-outputs function)]
-       [:th {:key (:id output)} (:name output)])]
-    (if (seq (:preview function))
-      (for [[index result-row]
-            (map-indexed vector (:preview function))]
-        [:tr {:key index}
-         (for [[id value] result-row]
-           [:td {:key id} (or (str value) "Blank")])]))]])
+  [:div {:class "card-content"}
+   [table-component {:sort-columns (:outputs function)
+                     :columns (function-outputs @app-state function)
+                     :data-rows (:preview function)}]])
 
 (defn function-card [function]
   [:div
@@ -94,6 +74,8 @@
    {:class "card card-table"
     :on-click #(load-table-editor table)}
    [:div.card-header "Data"]
+   [:div.card-subheader
+    (.toLocaleString (js/Date. (:updated table)))]
    (render-table-data table)])
 
 (defn table-collection [table]
@@ -108,8 +90,7 @@
        :on-click #(load-table-editor table)}
       (:name table)]
      [:div.table-container-subheader
-      (-> table :updated js/Date. .toLocaleString)
-      (str (:count table) "rows")]
+      (str (:count table) " rows")]
      [:div.table-container-cards
       (table-card table)
       (doall (map function-card table-functions))

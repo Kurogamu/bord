@@ -34,7 +34,6 @@ body {
 
 .app-root {
   height: 100vh;
-  width: 100vw;
 }
 
 .top-menu {
@@ -167,13 +166,48 @@ body {
   right: 0;
   left: 0;
   margin: auto;
-  width: clamp(24rem,32rem,86vw);
+  width: fit-content;
+  min-width: 24rem;
   max-height: 86vh;
   overflow: auto;
   background-color: $modal-background-color;
   border: $modal-border;
   border-radius: 0 .25rem .25em .25em;
   box-shadow: rgba(10,10,10,.8) 0px 20px 20px 30px;
+  animation: slide-in .5s ease-out;
+
+  &-closing {
+    animation: slide-out .5s ease-in;
+  }
+
+  @keyframes slide-in {
+    from {
+      transform: translateY(-150%);
+    }
+  }
+
+  @keyframes slide-out {
+    to {
+      transform: translateY(-150%);
+    }
+  }
+
+  &-editor {
+    width: clamp(24rem,32rem,86vw);
+  }
+
+  .data-preview {
+    .table-wrapper {
+      overflow-x: scroll;
+    }
+  }
+
+  &-data {
+    .table-wrapper {
+      overflow-x: scroll;
+      max-width: 86vw;
+    }
+  }
 
   &-header {
     padding: 1rem;
@@ -434,6 +468,11 @@ body {
 .column-editor {
   display: flex;
   flex-direction: row;
+
+  .column-label {
+    flex: 1 1 auto;
+  }
+
   > div:not(:last-child) {
     margin-right: 1rem;
   }
@@ -543,15 +582,6 @@ body {
       font-weight: normal;
       font-size: 85%;
     }
-    border-bottom: $border-color .1rem solid;
-  }
-
-  .card-subheader {
-    grid-column: span 2;
-    font-size: 85%;
-    font-style: italic;
-    text-align: right;
-    color: $faded-color;
   }
 }
 
@@ -567,11 +597,20 @@ body {
   cursor: pointer;
   flex: 0 0 auto;
 
-  .card-header {
+  &-header {
     font: 120% serif;
     font-weight: 600;
     padding-bottom: .25rem;
     text-overflow: ellipsis;
+    border-bottom: $border-color .1rem solid;
+  }
+
+  &-subheader {
+    grid-column: span 2;
+    font-size: 85%;
+    font-style: italic;
+    text-align: right;
+    color: $faded-color;
   }
 
   &-content {
@@ -674,26 +713,6 @@ body {
   justify-content: space-evenly;
 }
 
-.modal-editor {
-  animation: slide-in .5s ease-out;
-
-  &-closing {
-    animation: slide-out .5s ease-in;
-  }
-
-  @keyframes slide-in {
-    from {
-      transform: translateY(-150%);
-    }
-  }
-
-  @keyframes slide-out {
-    to {
-      transform: translateY(-150%);
-    }
-  }
-}
-
 .modal-select {
   animation: pop-in .3s ease-out;
 
@@ -754,6 +773,7 @@ body {
   &-group {
     display: flex;
     flex-direction: row;
+    justify-content: center;
     margin-top: .5rem;
   }
 
