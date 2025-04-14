@@ -17,8 +17,7 @@
   (let [sorted-results (->> results
                             (map :result)
                             (sort-by :offset)
-                            (map #(-> % :value first))
-                            (map #(assoc % "b8170aeb-0a72-48f7-b4be-4c1245774e57" 1)))
+                            (map #(-> % :value first)))
         reduce-result (run-function sorted-results function)]
     (js/console.log (clj->js function))
     (js/console.log (clj->js sorted-results))
