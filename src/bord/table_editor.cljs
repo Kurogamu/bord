@@ -26,7 +26,7 @@
   {:id (js/crypto.randomUUID)
    :object-id table-id
    :first-row 0
-   :last-row 0
+   :last-row 1
    :offset 0
    :data [{}]})
 
@@ -45,14 +45,12 @@
 ;; Update
 
 (defn calculate-move-cell [state direction]
-  (let [[row column-id] (get-in state [:table-editor :active-cell])
+  (let [[_ row column-id] (get-in state [:table-editor :active-cell])
         sort-columns (get-in state [:table-editor :meta :sort-columns])
         column-index (find-first-i sort-columns column-id)
 
-        last-row
-        (-> (get-in state [:table-editor :fragment :data])
-            count
-            dec)
+        [row-offset _ limit] (get-in state [:table-editor :view-rows])
+        last-row (+ row-offset limit)
 
         last-column
         (-> (get-in state [:table-editor :meta :columns])
@@ -72,9 +70,9 @@
 
 (defn update-data-preview [state]
   (let [preview-rows
-        (->> (get-in state [:table-editor :meta :count])
-             (min 5)
-             (subvec (get-in state [:table-editor :fragment :data]) 0))]
+        (-> (get-in state [:table-editor :meta :count])
+            (min 5)
+            (take (get-in state [:table-editor :fragments 0 :data])))]
     (assoc-in state [:table-editor :meta :data-preview] preview-rows)))
 
 (defn handler [state [event value]]
@@ -98,11 +96,16 @@
             (update-in (meta-path :sort-columns) conj (:id new-column))))
 
       :edit-cell
-      (let [cell-path (concat
-                        [:table-editor :fragment :data]
-                        (get-in state [:table-editor :active-cell]))]
-        (-> state
-            (assoc-in cell-path value)
+      (let [[fragment-index row-index column-id]
+            (get-in state [:table-editor :active-cell])
+            cell-path [:table-editor
+                       :fragments
+                       fragment-index
+                       :data
+                       row-index
+                       column-id]]
+        (js/console.log (clj->js (get-in state [:table-editor :fragments 0])))
+        (-> (assoc-in state cell-path value)
             update-data-preview))
 
       :set-active-cell (assoc-in state [:table-editor :active-cell] value)
@@ -112,27 +115,54 @@
       (assoc-in state
                 [:table-editor :active-cell]
                 (calculate-move-cell state value))
-      :set-fragment (assoc-in state [:table-editor :fragment] value)
+      :set-fragments
+      (assoc-in state
+                [:table-editor :fragments]
+                (->> value vals (sort-by :offset) vec))
 
       :add-row
-      (-> state
-          (update-in [:table-editor :fragment :data] conj {})
-          (update-in (meta-path :count) inc)
-          update-data-preview)
+      (let [fragment-index (-> state :table-editor :fragments count dec)]
+        (if (=
+             (dec (get-in state (meta-path :count)))
+             (get-in state [:table-editor :fragments fragment-index :last-row]))
+          state
+          (-> state
+              (update-in [:table-editor :fragments fragment-index :data] conj {})
+              (update-in [:table-editor :fragments fragment-index :last-row] inc)
+              (update-in (meta-path :count) inc)
+              update-data-preview)))
+      
       :init-closing (assoc-in state [:table-editor :closing] true)
       :set-mode (assoc-in state [:table-editor :mode] value)
+      :set-view-rows (assoc-in state [:table-editor :view-rows] value)
       state)))
 
 ;; -------------------------
 ;; Task
 
+(defn fetch-fragments [row-index]
+  (let [render-count (->> (get-in @editor-cursor [:meta :sort-columns])
+                          (count)
+                          (max 1)
+                          (/ 5000))
+        first-row (-> row-index
+                      (- (/ render-count 2))
+                      (max 0))]
+    (emit [:set-view-rows [first-row (or row-index 0) render-count]] handler)
+    (data/read-row-fragment {:object-id (get-in @editor-cursor [:meta :id])
+                             :row-number first-row
+                             :limit render-count
+                             :on-success #(emit [:set-fragments %] handler)})))
+
 (defn init-fragment []
   (let [new-fragment (init-fragment-data (get-in @editor-cursor [:meta :id]))
-        success-callback #(emit [:set-fragment new-fragment] handler)
+        success-callback #(emit
+                            [:set-fragments {(:id new-fragment) new-fragment}]
+                            handler)
         error-callback #(js/console.error "Failed to create fragment" %)]
-    (data/put-fragment {:data new-fragment
-                        :on-success success-callback
-                        :on-error error-callback})))
+    (data/put-fragments {:data [new-fragment]
+                         :on-success success-callback
+                         :on-error error-callback})))
 
 (defn init-table [on-complete]
   (let [new-table (init-table-data)
@@ -144,18 +174,13 @@
                     :on-success success-callback
                     :on-error error-callback})))
 
-(defn setup-new-table []
-  (init-table init-fragment))
-
 (defn load-existing-table [table]
   (emit [:open-editor-table table])
-  (data/read-row-fragment {:object-id (:id table)
-                      :row-number 0
-                      :on-success #(emit [:set-fragment %] handler)}))
+  (fetch-fragments 0))
 
 (defn load-table-editor [table]
   (if (= table :new)
-    (setup-new-table)
+    (init-table init-fragment)
     (load-existing-table table)))
 
 (def store-meta-queue (r/atom 0))
@@ -188,9 +213,9 @@
   (reset! store-fragment-queue 0)
   (let [success-callback #(js/console.info "Fragment saved")
         error-callback #(js/console.error "Failed to create table!" %)]
-    (data/put-fragment {:data (:fragment @editor-cursor)
-                   :on-success success-callback
-                   :on-error error-callback})))
+    (data/put-fragments {:data (:fragments @editor-cursor)
+                         :on-success success-callback
+                         :on-error error-callback})))
 
 (defn debounce-store-fragment []
   (go
@@ -279,9 +304,10 @@
     "Add column"]])
 
 (defn cell-editor [column-type]
-  (let [value (get-in
+  (let [[fragment-index row-index column-id] (:active-cell @editor-cursor)
+        value (get-in
                 @editor-cursor
-                (concat [:fragment :data] (:active-cell @editor-cursor)))
+                [:fragments fragment-index :data row-index column-id])
         on-change (fn [event]
                     (as-> (.. event -target -value) v
                       (if (= :number (keyword column-type))
@@ -309,13 +335,17 @@
                        nil))}]))
 
 (defn editor-cell [{:keys [row-index column-id data]}]
-  (let [cell-key [row-index column-id]
+  (let [fragment-index (->> (:fragments @editor-cursor)
+                            (map :first-row)
+                            (filter #(>= row-index %))
+                            first)
+        cell-key [fragment-index row-index column-id]
         activate-cell #(emit [:set-active-cell cell-key] handler)]
     (cond
       (= cell-key (:active-cell @editor-cursor))
       [:td.active
        (cell-editor
-         (get-in @editor-cursor [:meta :columns (second cell-key) :type]))]
+         (get-in @editor-cursor [:meta :columns column-id :type]))]
 
       (blank? data)
       [:td {:class "blank" :on-click activate-cell} "Blank"]
@@ -331,22 +361,45 @@
     [editor-name]
     [editor-columns]]])
 
+(defn get-rows [fragments start-row limit]
+  (reduce
+    (fn [result-rows fragment]
+      (if (< start-row (:first-row fragment))
+        (concat result-rows
+                (take (- limit (count result-rows)) (:data fragment)))
+        (subvec (:data fragment)
+                (- start-row (:first-row fragment))
+                (min (:last-row fragment) (+ (- start-row (:first-row fragment)) limit)))))
+    []
+    fragments))
+
 (defn data []
-  [:div
-   {:class "modal-body modal-data"}
-   [:h3 "Data"]
-   
-   [table-component
-    {:sort-columns (get-in @editor-cursor [:meta :sort-columns])
-     :columns (get-in @editor-cursor [:meta :columns])
-     :data-rows (take
-                  (/ 1000 (count (get-in @editor-cursor [:meta :sort-columns])))
-                  (get-in @editor-cursor [:fragment :data]))
-     :cell-component editor-cell}]
-   [:button
-    {:class "btn add-row-btn"
-     :on-click #(emit [:add-row nil] handler)}
-    "Add row"]])
+  (let [data-fragments (:fragments @editor-cursor)
+        [start-row target limit] (:view-rows @editor-cursor)
+        render-rows (get-rows data-fragments start-row limit)]
+    [:div
+     {:class "modal-body modal-data"}
+     [:h3 "Data"]
+     [:div
+      {:class "input-wrapper select-row"}
+      [:input
+       {:class "input"
+        :type "number"
+        :value target
+        :auto-focus true
+        :placeholder "Get row"
+        :max (get-in @editor-cursor [:meta :last-row])
+        :on-change #(fetch-fragments (.. % -target -value))}]]
+     [table-component
+      {:sort-columns (get-in @editor-cursor [:meta :sort-columns])
+       :columns (get-in @editor-cursor [:meta :columns])
+       :data-rows render-rows
+       :row-offset start-row
+       :cell-component editor-cell}]
+     [:button
+      {:class "btn add-row-btn"
+       :on-click #(emit [:add-row nil] handler)}
+      "Add row"]]))
 
 (defn table-editor []
   [:div
@@ -365,6 +418,6 @@
       "Data"]
      [:button {:class "btn btn-delete" :on-click delete} "Delete"]
      [:button {:class "btn btn-close" :on-click close-table-editor} "Close"]]]
-   (if (= :data (get-in @app-state [:table-editor :mode]))
+   (if (= :data (:mode @editor-cursor))
      [data]
      [settings])])

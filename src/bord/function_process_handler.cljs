@@ -6,12 +6,12 @@
     [bord.worker-handler :as worker]))
 
 (defn offsets [num-fragments]
-  (let [limit (js/Math.ceil (/ num-fragments worker/num-workers))]
-    (map
-      (fn [index]
-        [(* index limit)
-         limit])
-      (range worker/num-workers))))
+  (if (< num-fragments worker/num-workers)
+    [[0 num-fragments]]
+    (let [limit (js/Math.ceil (/ num-fragments worker/num-workers))]
+      (map
+        (fn [index] [(* index limit) limit])
+        (range worker/num-workers)))))
 
 (defn gather-reduce [function results on-success]
   (let [sorted-results (->> results
@@ -19,16 +19,13 @@
                             (sort-by :offset)
                             (map #(-> % :value first)))
         reduce-result (run-function sorted-results function)]
-    (js/console.log (clj->js function))
-    (js/console.log (clj->js sorted-results))
-    (js/console.log (clj->js reduce-result))
-    (data/put-fragment
-      {:data {:id (js/crypto.randomUUID)
-              :object-id (:id function)
-              :first-row 0
-              :last-row 1
-              :offset 0
-              :data reduce-result}
+    (data/put-fragments
+      {:data [{:id (js/crypto.randomUUID)
+               :object-id (:id function)
+               :first-row 0
+               :last-row 1
+               :offset 0
+               :data reduce-result}]
        :on-success
        (fn []
          (js/console.info "Pushed gathered results ")

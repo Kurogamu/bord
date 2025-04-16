@@ -7,14 +7,15 @@
   (assoc args :id (js/crypto.randomUUID)))
 
 (defn put-result-fragment [function input results]
+  (js/console.log (clj->js function) (clj->js results))
   (let [result-fragment {:id (js/crypto.randomUUID)
                          :object-id (:id function)
                          :first-row (:first-row input)
                          :last-row (:last-row input)
                          :offset (:offset input)
                          :data results}]
-    (data/put-fragment
-      {:data result-fragment
+    (data/put-fragments
+      {:data [result-fragment]
        :on-success
        #(js/console.info "Pushed fragment " (:offset result-fragment))
        :on-error
@@ -27,7 +28,6 @@
                   (cons (first @partial-result) (:data value))
                   (:data value))
           results (doall (run-function input function))]
-      (js/console.log (:offset value) (clj->js results))
       (if reduce-type
         (reset! partial-result results)
         (put-result-fragment function value results))

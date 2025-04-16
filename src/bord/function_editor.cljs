@@ -10,7 +10,7 @@
                          remove-match
                          swap-i
                          animation-trigger]]
-    [bord.data :refer [put-function delete-function read-row-fragment]]
+    [bord.data :as data]
     [bord.function :refer [all-operations
                            function-types
                            param-type
@@ -135,8 +135,12 @@
 
       :set-mode
       (assoc-in state [:function-editor :mode] value)
-      :set-fragment
-      (assoc-in state [:function-editor :fragment] value)
+      :set-view-rows
+      (assoc-in state [:function-editor :view-rows] value)
+      :set-fetched-data
+      (assoc-in state
+                [:function-editor :fetched-data]
+                (->> value vals (sort-by :offset) vec))
 
       state)))
 
@@ -147,22 +151,30 @@
   (let [new-function (merge (init-function-data) source)
         success-callback #(emit [:set-editor-function new-function])
         error-callback #(js/console.error "Failed to create function" %)]
-    (put-function
+    (data/put-function
       {:data new-function
        :on-success success-callback
        :on-error error-callback})))
 
-(defn load-fragment [row-number]
-  (read-row-fragment {:object-id (:id @editor-cursor)
-                      :row-number row-number
-                      :limit 100
-                      :on-success #(emit [:set-fragment %] handler)}))
+(defn fetch-fragments [row-index]
+  (let [render-count (->> (function-outputs @app-state @editor-cursor)
+                          (count)
+                          (max 1)
+                          (/ 5000))
+        first-row (-> row-index
+                      (- (/ render-count 2))
+                      (max 0))]
+    (emit [:set-view-rows [first-row (or row-index 0) render-count]] handler)
+    (data/read-row-fragment {:object-id (:id @editor-cursor)
+                             :row-number first-row
+                             :limit render-count
+                             :on-success #(emit [:set-fetched-data %] handler)})))
 
 (defn load-function-editor [function]
   (if (contains? function :id)
     (do
       (emit [:set-editor-function function])
-      (load-fragment 0))
+      (fetch-fragments 0))
     (setup-new-function function)))
 
 (def store-function-queue (r/atom 0))
@@ -172,7 +184,7 @@
   (let [data @editor-cursor
         success-callback #(js/console.info "Data saved")
         error-callback #(js/console.error "Failed to store data: " %)]
-    (put-function
+    (data/put-function
       {:data data
        :on-success success-callback
        :on-error error-callback})))
@@ -213,7 +225,7 @@
   (let [data @editor-cursor
         delete-callback #(emit [:delete-function data])]
     (emit [:set-function-state [(:id data) :deleting]])
-    (delete-function {:function-id (:id data)
+    (data/delete-function {:function-id (:id data)
                       :on-complete delete-callback})
     (close-modal)))
 
@@ -532,17 +544,39 @@
    [editor-output]
    [editor-preview]])
 
+(defn get-rows [fragments start-row limit]
+  (reduce
+    (fn [result-rows fragment]
+      (if (< start-row (:first-row fragment))
+        (concat result-rows
+                (take (- limit (count result-rows)) (:data fragment)))
+        (subvec (:data fragment)
+                (- start-row (:first-row fragment))
+                (min (:last-row fragment) (+ (- start-row (:first-row fragment)) limit)))))
+    []
+    fragments))
+
 (defn viewer []
-  [:div
-   {:class "modal-body modal-data"}
-   [:h3 "Data"]
-   (let [data-rows
-         (take
-           100
-           (get-in @app-state [:function-editor :fragment :data]))]
+  (let [data-fragments
+        (get-in @app-state [:function-editor :fetched-data])
+        [start-row target limit]
+        (get-in @app-state [:function-editor :view-rows])
+        render-rows (get-rows data-fragments start-row limit)]
+    [:div
+     {:class "modal-body modal-data"}
+     [:h3 "Data"]
+     [:input
+      {:class "input"
+       :type "number"
+       :value target
+       :auto-focus true
+       :placeholder "Get row"
+       :max (:last-row @editor-cursor)
+       :on-change #(fetch-fragments (.. % -target -value))}]
      [table-component {:sort-columns (:outputs @editor-cursor)
                        :columns (function-outputs @app-state @editor-cursor)
-                       :data-rows data-rows}])])
+                       :row-offset start-row
+                       :data-rows render-rows}]]))
 
 (defn function-editor []
   [:div

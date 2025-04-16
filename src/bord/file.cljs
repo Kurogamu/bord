@@ -1,6 +1,6 @@
 (ns bord.file
   (:require
-    [bord.data :refer [fetch-meta put-meta put-fragment]]
+    [bord.data :refer [fetch-meta put-meta put-fragments]]
     [bord.fetch :refer [fetch-read-lines]]
     [clojure.string :as str]))
 
@@ -67,12 +67,12 @@
              :data processed})]
       (swap! row-counter + (count processed))
       (swap! fragment-counter inc)
-      (put-fragment
-        {:data fragment
-         :on-success
-         #(js/console.info "Pushed fragment " (clj->js fragment))
-         :on-error
-         #(js/console.error "Fragment failed " (clj->js fragment))}))))
+      (put-fragments
+        [{:data fragment
+          :on-success
+          #(js/console.info "Pushed fragment " (clj->js fragment))
+          :on-error
+          #(js/console.error "Fragment failed " (clj->js fragment))}]))))
 
 (defn store-file-data [{:keys [url table-id report]}]
   (let [row-counter (atom 0)

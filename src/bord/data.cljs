@@ -98,10 +98,6 @@
   (set! (.-onsuccess store) callback)
   store)
 
-(defn- read-first-cursor [event on-complete]
-  (on-complete
-    (some-> (.. event -target -result) (.-value) stored-entry->clj)))
-
 (defn- read-all-cursor [event result on-complete]
   (if-let [cursor (.. event -target -result)]
     (do
@@ -140,11 +136,16 @@
         (.openCursor cursor-range)
         (set-success-action on-success))))
 
-(defn read-row-fragment [{:keys [object-id row-number on-success]}]
-  (fetch-fragments
-    "row"
-    (.lowerBound (idb-key-range) (clj->js [object-id row-number]))
-    #(read-first-cursor % on-success)))
+(defn read-row-fragment [{:keys [object-id row-number on-success limit]}]
+  (let [result (atom [])]
+    (fetch-fragments
+      "row"
+      (.bound (idb-key-range)
+              (clj->js [object-id row-number])
+              (clj->js [object-id (+ row-number limit)])
+              false
+              true)
+      #(read-all-cursor % result on-success))))
 
 (defn read-fragments [{:keys [object-id offset limit cursor-callback]}]
   (let [params (clj->js [[object-id offset] [object-id (+ offset limit)]])
@@ -158,23 +159,25 @@
       cursor-range
       #(iterative-cursor % cursor-callback))))
 
-(defn- put-item [{:as args :keys [data store-name on-success on-error]}]
-  (let [transaction-params {:store-names [store-name]
-                            :command "readwrite"}]
-    (-> (get-transaction transaction-params)
-        (.objectStore store-name)
-        (.put (clj->stored-entry data))
-        (set-error-action on-error)
-        (set-success-action on-success))))
+(defn- put-items [{:as args :keys [data store-name on-success on-error]}]
+  (let [store (-> {:store-names [store-name]
+                   :command "readwrite"}
+                  get-transaction
+                  (.objectStore store-name))]
+    (run!
+      #(-> (.put store (clj->stored-entry %))
+           (set-error-action on-error)
+           (set-success-action on-success))
+      data)))
 
 (defn put-meta [args]
-  (put-item (assoc args :store-name meta-store-name)))
-
-(defn put-fragment [args]
-  (put-item (assoc args :store-name fragment-store-name)))
+  (put-items (assoc args :store-name meta-store-name :data [(:data args)])))
 
 (defn put-function [args]
-  (put-item (assoc args :store-name function-store-name)))
+  (put-items (assoc args :store-name function-store-name :data [(:data args)])))
+
+(defn put-fragments [args]
+  (put-items (assoc args :store-name fragment-store-name)))
 
 (defn read-all-items [store-name on-complete]
   (let [transaction-params
@@ -211,8 +214,8 @@
   (let [transaction-params
         {:store-names [store-name]
          :command "readonly"
-         :on-complete #(js/console.info "Fetched: " store-name object-key)
-         :on-error #(js/console.error "Fetch failed: " store-name object-key %)}
+         :on-complete #(js/console.info "Fetched:" store-name object-key)
+         :on-error #(js/console.error "Fetch failed:" store-name object-key %)}
         request
         (-> (get-transaction transaction-params)
             (.objectStore store-name)
