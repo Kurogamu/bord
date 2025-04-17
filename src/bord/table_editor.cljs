@@ -104,7 +104,6 @@
                        :data
                        row-index
                        column-id]]
-        (js/console.log (clj->js (get-in state [:table-editor :fragments 0])))
         (-> (assoc-in state cell-path value)
             update-data-preview))
 
@@ -118,7 +117,7 @@
       :set-fragments
       (assoc-in state
                 [:table-editor :fragments]
-                (->> value vals (sort-by :offset) vec))
+                (->> value (sort-by :offset) vec))
 
       :add-row
       (let [fragment-index (-> state :table-editor :fragments count dec)]
@@ -135,40 +134,51 @@
       :init-closing (assoc-in state [:table-editor :closing] true)
       :set-mode (assoc-in state [:table-editor :mode] value)
       :set-view-rows (assoc-in state [:table-editor :view-rows] value)
+      :set-loading-view (assoc-in state [:table-editor :loading-view] value)
       state)))
 
 ;; -------------------------
 ;; Task
 
 (defn fetch-fragments [row-index]
-  (let [render-count (->> (get-in @editor-cursor [:meta :sort-columns])
+  (emit [:set-loading-view true] handler)
+  (let [result (atom [])
+        limit (->> (get-in @editor-cursor [:meta :sort-columns])
                           (count)
                           (max 1)
-                          (/ 5000))
+                          (/ 1000)
+                          (js/Math.floor))
         first-row (-> row-index
-                      (- (/ render-count 2))
-                      (max 0))]
-    (emit [:set-view-rows [first-row (or row-index 0) render-count]] handler)
+                      (- 5)
+                      (max 0))
+        read-callback (fn [data]
+                        (if (and (some? data)
+                                 (< (:first-row data) (+ first-row limit)))
+                          (do (swap! result conj data) true)
+                          (do 
+                            (emit [:set-fragments @result] handler)
+                            (emit [:set-loading-view false] handler)
+                            false)))]
+    (emit [:set-view-rows [first-row (or row-index 0) limit]] handler)
     (data/read-row-fragment {:object-id (get-in @editor-cursor [:meta :id])
-                             :row-number first-row
-                             :limit render-count
-                             :on-success #(emit [:set-fragments %] handler)})))
+                             :start-row first-row
+                             :on-success read-callback})))
 
-(defn init-fragment []
+(defn init-fragment [table-meta]
   (let [new-fragment (init-fragment-data (get-in @editor-cursor [:meta :id]))
-        success-callback #(emit
-                            [:set-fragments {(:id new-fragment) new-fragment}]
-                            handler)
+        success-callback (fn []
+                           (emit [:set-fragments [new-fragment]] handler)
+                           (emit [:set-view-rows [0 0 100]] handler))
         error-callback #(js/console.error "Failed to create fragment" %)]
     (data/put-fragments {:data [new-fragment]
                          :on-success success-callback
                          :on-error error-callback})))
 
-(defn init-table [on-complete]
+(defn init-table []
   (let [new-table (init-table-data)
         success-callback (fn []
                            (emit [:set-editor-table new-table])
-                           (on-complete))
+                           (init-fragment new-table))
         error-callback #(js/console.error "Failed to create table!" %)]
     (data/put-meta {:data new-table
                     :on-success success-callback
@@ -180,7 +190,7 @@
 
 (defn load-table-editor [table]
   (if (= table :new)
-    (init-table init-fragment)
+    (init-table)
     (load-existing-table table)))
 
 (def store-meta-queue (r/atom 0))
@@ -237,7 +247,6 @@
     #(if (= (.-animationName %) "slide-out") (emit [:close-editor nil]))
     #js {:once true})
   (emit [:init-closing nil] handler))
-
 
 (defn close-table-editor []
   (store-meta)
@@ -364,42 +373,53 @@
 (defn get-rows [fragments start-row limit]
   (reduce
     (fn [result-rows fragment]
-      (if (< start-row (:first-row fragment))
+      (if (>= (:first-row fragment) start-row)
         (concat result-rows
                 (take (- limit (count result-rows)) (:data fragment)))
         (subvec (:data fragment)
                 (- start-row (:first-row fragment))
-                (min (:last-row fragment) (+ (- start-row (:first-row fragment)) limit)))))
+                (-> (+ start-row limit)
+                    (min (:last-row fragment))
+                    (- (:first-row fragment))))))
     []
-    fragments))
+    (->> fragments
+         (filter #(< start-row (:last-row %)))
+         (filter #(> (+ start-row limit) (:first-row %))))))
 
-(defn data []
-  (let [data-fragments (:fragments @editor-cursor)
-        [start-row target limit] (:view-rows @editor-cursor)
-        render-rows (get-rows data-fragments start-row limit)]
+(defn data-view-selector [{:keys [value]}]
+  [:div
+   {:class "input-wrapper select-row"}
+   [:input
+    {:class "input"
+     :type "number"
+     :value value
+     :auto-focus true
+     :placeholder "Get row"
+     :max (-> @editor-cursor :meta :count dec)
+     :on-change #(fetch-fragments (.. % -target -value))}]])
+
+(defn data-view-table [{:keys [start-row limit]}]
+  [table-component
+   {:sort-columns (get-in @editor-cursor [:meta :sort-columns])
+    :columns (get-in @editor-cursor [:meta :columns])
+    :data-rows (get-rows (:fragments @editor-cursor) start-row limit)
+    :row-offset start-row
+    :cell-component editor-cell}])
+
+(defn data-view []
+  (let [[start-row target limit] (:view-rows @editor-cursor)]
     [:div
      {:class "modal-body modal-data"}
      [:h3 "Data"]
-     [:div
-      {:class "input-wrapper select-row"}
-      [:input
-       {:class "input"
-        :type "number"
-        :value target
-        :auto-focus true
-        :placeholder "Get row"
-        :max (get-in @editor-cursor [:meta :last-row])
-        :on-change #(fetch-fragments (.. % -target -value))}]]
-     [table-component
-      {:sort-columns (get-in @editor-cursor [:meta :sort-columns])
-       :columns (get-in @editor-cursor [:meta :columns])
-       :data-rows render-rows
-       :row-offset start-row
-       :cell-component editor-cell}]
-     [:button
-      {:class "btn add-row-btn"
-       :on-click #(emit [:add-row nil] handler)}
-      "Add row"]]))
+     [data-view-selector {:value (or target 0)}]
+     (if (:loading-view @editor-cursor)
+       [:div.loading "Loading data..."]
+       [data-view-table {:start-row start-row :limit limit}])
+     (when (>= limit (-> @editor-cursor :meta :count dec))
+      [:button
+       {:class "btn add-row-btn"
+        :on-click #(emit [:add-row nil] handler)}
+       "Add row"])]))
 
 (defn table-editor []
   [:div
@@ -419,5 +439,5 @@
      [:button {:class "btn btn-delete" :on-click delete} "Delete"]
      [:button {:class "btn btn-close" :on-click close-table-editor} "Close"]]]
    (if (= :data (:mode @editor-cursor))
-     [data]
+     [data-view]
      [settings])])

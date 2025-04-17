@@ -59,7 +59,7 @@
   (doto (.createObjectStore db fragment-store-name #js {"keyPath" "id"})
     (.createIndex "object" "object_id" #js {"unique" false})
     (.createIndex "fragment_offset" ["object_id" "offset"] #js {"unique" true})
-    (.createIndex "row" ["object_id" "first_row"] #js {"unique" true})))
+    (.createIndex "row_bound" ["object_id" "last_row"] #js {"unique" true})))
 
 (defn- init-function-store [db]
   (.createObjectStore db function-store-name #js {"keyPath" "id"}))
@@ -136,16 +136,11 @@
         (.openCursor cursor-range)
         (set-success-action on-success))))
 
-(defn read-row-fragment [{:keys [object-id row-number on-success limit]}]
-  (let [result (atom [])]
-    (fetch-fragments
-      "row"
-      (.bound (idb-key-range)
-              (clj->js [object-id row-number])
-              (clj->js [object-id (+ row-number limit)])
-              false
-              true)
-      #(read-all-cursor % result on-success))))
+(defn read-row-fragment [{:keys [object-id start-row on-success]}]
+  (fetch-fragments
+    "row_bound"
+    (.bound (idb-key-range) (clj->js [object-id start-row]) (clj->js [object-id js/Infinity]))
+    #(iterative-cursor % on-success)))
 
 (defn read-fragments [{:keys [object-id offset limit cursor-callback]}]
   (let [params (clj->js [[object-id offset] [object-id (+ offset limit)]])

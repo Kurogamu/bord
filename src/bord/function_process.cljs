@@ -7,7 +7,6 @@
   (assoc args :id (js/crypto.randomUUID)))
 
 (defn put-result-fragment [function input results]
-  (js/console.log (clj->js function) (clj->js results))
   (let [result-fragment {:id (js/crypto.randomUUID)
                          :object-id (:id function)
                          :first-row (:first-row input)

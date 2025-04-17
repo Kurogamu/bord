@@ -122,7 +122,8 @@
        :disabled (not (:selected @modal-cursor))}
       "upload file"]
      [:button {:class "btn close-btn" :on-click close-modal} "Cancel"]]]
-   [:div.modal-body
+   [:div
+    {:class "modal-body modal-editor"}
     [:div.modal-section
      [:h3 "Select File"]
      [:div.input-wrapper
