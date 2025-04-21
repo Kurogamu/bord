@@ -177,9 +177,9 @@
                             (emit [:set-loading-view false] handler)
                             false)))]
     (emit [:set-view-rows [first-row (or row-index 0) limit]] handler)
-    (data/read-row-fragment {:object-id (:id @editor-cursor)
-                             :start-row first-row
-                             :on-success read-callback})))
+    (data/read-row-fragments {:object-id (:id @editor-cursor)
+                              :start-row first-row
+                              :cursor-callback read-callback})))
 
 (defn load-function-editor [function]
   (if (contains? function :id)

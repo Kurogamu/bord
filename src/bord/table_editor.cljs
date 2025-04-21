@@ -144,10 +144,10 @@
   (emit [:set-loading-view true] handler)
   (let [result (atom [])
         limit (->> (get-in @editor-cursor [:meta :sort-columns])
-                          (count)
-                          (max 1)
-                          (/ 1000)
-                          (js/Math.floor))
+                   (count)
+                   (max 1)
+                   (/ 1000)
+                   (js/Math.floor))
         first-row (-> row-index
                       (- 5)
                       (max 0))
@@ -160,9 +160,9 @@
                             (emit [:set-loading-view false] handler)
                             false)))]
     (emit [:set-view-rows [first-row (or row-index 0) limit]] handler)
-    (data/read-row-fragment {:object-id (get-in @editor-cursor [:meta :id])
-                             :start-row first-row
-                             :on-success read-callback})))
+    (data/read-row-fragments {:object-id (get-in @editor-cursor [:meta :id])
+                              :start-row first-row
+                              :cursor-callback read-callback})))
 
 (defn init-fragment [table-meta]
   (let [new-fragment (init-fragment-data (get-in @editor-cursor [:meta :id]))

@@ -1,7 +1,7 @@
 (ns bord.worker
   (:require
     [bord.file :refer [store-file-data]]
-    [bord.data :refer [db-init fetch-function]]
+    [bord.data :refer [init-storage fetch-function]]
     [bord.function-process :refer [process-fragments]]
     [clojure.edn :refer [read-string]]))
 
@@ -28,5 +28,5 @@
 
 (defn init-worker []
   (js/self.addEventListener "message" message-handler)
-  (db-init {:on-success #(post-message [:worker-init "success"])
+  (init-storage {:on-success #(post-message [:worker-init "success"])
             :on-error #(js/console.error "DB for worker error " %)}))

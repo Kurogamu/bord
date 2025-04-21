@@ -8,7 +8,7 @@
     [bord.task-monitor :refer [task-summary task-view-popup]]
     [bord.worker-handler :refer [init-workers]]
     [cljs.core.async :refer [go go-loop chan put!]]
-    [bord.data :refer [db-init read-all-tables read-all-functions]]
+    [bord.data :refer [init-storage read-all-tables read-all-functions]]
     [reagent.core :as r]
     [reagent.dom :as d]
     ["react" :as react]
@@ -163,16 +163,16 @@
 
 (defn mount-root [] (d/render [app-root] (.getElementById js/document "app")))
 
-(defn init-db []
-  (let [on-success read-db
-        on-error #(js/console.error "Failed to init db!" %)]
-    (db-init {:on-success on-success :on-error on-error})))
+(defn init-db [on-success]
+  (let [on-error #(js/console.error "Failed to init db!" %)]
+    (init-storage {:on-success on-success :on-error on-error})))
 
 (defn init-app []
   (js/console.info "Initializing app..")
   (mount-root)
-  (init-db)
-  (init-workers)
+  (init-db (fn []
+             (read-db)
+             (init-workers)))
   (keydown-handler))
 
 (defn entry-point []

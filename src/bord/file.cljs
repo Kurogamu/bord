@@ -69,10 +69,8 @@
       (swap! fragment-counter inc)
       (put-fragments
         {:data [fragment]
-         :on-success
-         #(js/console.info "Pushed fragment " (clj->js fragment))
-         :on-error
-         #(js/console.error "Fragment failed " (clj->js fragment))})
+         :on-success #(report [:set-progress 0.5])
+         :on-error #(js/console.error "Fragment failed at row " @row-counter)})
       true)))
 
 (defn store-file-data [{:keys [url table-id report]}]
