@@ -7,7 +7,7 @@
     [:th.blank "Blank"]
     [:th label]))
 
-(defn default-cell [{:keys [column-id data]}]
+(defn default-cell [{:keys [data]}]
   (if (clojure.string/blank? data)
     [:td.blank "Blank"]
     [:td (str data)]))
@@ -17,21 +17,17 @@
                          row-offset
                          sort-columns
                          cell-component]}]
-  (let [column-ids 
-        (cond->> sort-columns
-          (some? row-offset) (cons "row-number"))
-        data
-        (cond-> row-data
-          (some? row-offset) (assoc "row-number" (+ row-index row-offset)))]
   [:tr
+   (when (some? row-offset)
+     [default-cell {:key (str row-index "#")
+                    :data (str row-index)}])
    (map
      (fn [column-id]
        [cell-component {:key (str row-index column-id)
                         :row-index (+ row-index row-offset)
                         :column-id column-id
-                        :data (get data column-id)}])
-     column-ids)
-   ]))
+                        :data (get row-data column-id)}])
+     sort-columns)])
 
 (defn table-component [{:keys [sort-columns
                                columns

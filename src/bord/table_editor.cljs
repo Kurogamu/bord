@@ -360,7 +360,7 @@
       [:td {:class "blank" :on-click activate-cell} "Blank"]
 
       :else
-      [:td {:on-click activate-cell} (str data)])))
+      [:td {:class "editable" :on-click activate-cell} (str data)])))
 
 (defn settings []
   [:div
